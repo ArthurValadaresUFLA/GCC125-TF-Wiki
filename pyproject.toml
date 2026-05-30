@@ -1,6 +1,6 @@
 [project]
 name = "wiki"
-version = "0.1.0"
+version = "1.0.0"
 description = "Aplicação web para navegação e exportação de páginas Markdown em formato wiki."
 authors = [
     { name = "Arthur Valadares Campideli", email = "arthur.c.valadares@gmail.com" }
