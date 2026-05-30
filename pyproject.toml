@@ -1,0 +1,34 @@
+[project]
+name = "wiki"
+version = "0.1.0"
+description = "Aplicação web para navegação e exportação de páginas Markdown em formato wiki."
+authors = [
+    { name = "Arthur Valadares Campideli", email = "arthur.c.valadares@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "flask>=3.1.3,<4.0.0",
+    "markdown>=3.10.2,<4.0.0",
+    "pygments>=2.20.0,<3.0.0",
+    "gunicorn>=23.0.0,<24.0.0",
+    "python-dotenv>=1.0.1,<2.0.0",
+    "weasyprint (>=68.1,<69.0)"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "isort",
+    "mypy"
+]
+
+[tool.poetry]
+packages = [
+    { include = "wiki", from = "src" }
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,21 @@
+.highlight {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 14px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+}
+
+.highlight pre {
+    margin: 0;
+}
+
+.highlight .k { color: #ff7b72; }
+.highlight .s { color: #a5d6ff; }
+.highlight .c { color: #8b949e; }
+.highlight .n { color: #c9d1d9; }
+.highlight .o { color: #ff7b72; }
+.highlight .p { color: #c9d1d9; }
+.highlight .nf { color: #d2a8ff; }
+.highlight .nb { color: #ffa657; }

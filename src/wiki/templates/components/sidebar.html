@@ -1,0 +1,12 @@
+<aside class="sidebar">
+    <div class="sidebar-header">
+        Páginas
+    </div>
+    <nav class="sidebar-nav">
+        {% for page in pages %}
+        <a href="/{{ page.name }}" class="page-link">
+            {{ page.title }}
+        </a>
+        {% endfor %}
+    </nav>
+</aside>

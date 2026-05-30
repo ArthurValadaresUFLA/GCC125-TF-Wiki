@@ -1,0 +1,9 @@
+services:
+  wiki-app:
+    build: .
+    container_name: wiki_prod
+    ports:
+      - "5000:5000"
+    volumes:
+      - "/var/www/wiki_arquivos:/app/data"
+    restart: unless-stopped

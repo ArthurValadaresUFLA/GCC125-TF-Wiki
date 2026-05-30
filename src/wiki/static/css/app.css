@@ -1,0 +1,235 @@
+* {
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #101418;
+    --panel: #171b21;
+    --border: #2a2f37;
+    --text: #d7dde5;
+    --muted: #98a2ad;
+    --accent: #6aa9ff;
+    --accent-hover: #548ce6;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", "Source Sans 3", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.layout {
+    display: flex;
+}
+
+.content {
+    flex: 1;
+    padding: 2rem 4rem;
+    max-width: 100vw;
+}
+
+/* Navbar */
+.navbar {
+    height: 64px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    background: var(--panel);
+}
+
+.navbar-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.navbar-right input {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.navbar-right input:focus {
+    border-color: var(--accent);
+}
+
+/* Sidebar */
+.sidebar {
+    width: 280px;
+    min-height: calc(100vh - 64px);
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+    transition: width 0.3s ease;
+    flex-shrink: 0;
+}
+
+.sidebar.collapsed {
+    width: 0;
+    overflow: hidden;
+    border-right: none;
+}
+
+.sidebar-header {
+    padding: 1.5rem 1rem 0.5rem;
+    font-weight: bold;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+}
+
+.page-link {
+    padding: 0.6rem 1rem;
+    color: var(--text);
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background-color 0.15s, color 0.15s;
+    margin-bottom: 2px;
+}
+
+.page-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+/* Page Header & Actions */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 2.2rem;
+}
+
+.actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.actions a {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.actions a:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Cards (Index) */
+.hero {
+    margin-bottom: 3rem;
+    text-align: center;
+}
+
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.page-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    text-decoration: none;
+    color: var(--text);
+    transition: transform 0.2s, border-color 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.page-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+}
+
+.page-card h3 {
+    margin: 0;
+    color: #ffffff;
+}
+
+.page-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+/* Utilities */
+.icon-button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.icon-button:hover {
+    color: var(--text);
+}
+
+.logo {
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 1.2rem;
+}
+
+/* PDF e Impressão (Design Patterns Modernos) */
+@media print {
+    @page {
+        size: A4;
+        margin: 20mm;
+    }
+
+    .sidebar,
+    .navbar,
+    .actions,
+    .hero {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+        color: black !important;
+        font-size: 12pt;
+    }
+
+    .content {
+        padding: 0;
+    }
+
+    .page-header {
+        border-bottom: 2px solid #333;
+    }
+}

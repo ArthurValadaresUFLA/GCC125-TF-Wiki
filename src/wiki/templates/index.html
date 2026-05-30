@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %} Índice da Wiki {% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Base de Conhecimento</h1>
+  <p>Navegue pelas páginas da wiki.</p>
+</section>
+
+<section class="cards-grid">
+  {% for page in pages %}
+  <a href="/{{ page.name }}" class="page-card">
+    <div class="page-card-content">
+      <h3>{{ page.title }}</h3>
+      <p>Abrir página</p>
+    </div>
+  </a>
+  {% endfor %}
+</section>
+{% endblock %}
