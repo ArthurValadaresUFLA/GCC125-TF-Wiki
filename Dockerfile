@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
-# Instalar wkhtmltopdf (dependência do sistema operacional)
-RUN apt-get update && apt-get install -y \
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libharfbuzz0b \
     libpangoft2-1.0-0 \

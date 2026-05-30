@@ -9,11 +9,11 @@ from wiki.interfaces import IPdfRenderer
 
 class PdfService:
     def __init__(
-            self,
-            markdown_service: MarkdownService,
-            document_service: PdfDocumentService,
-            renderer: IPdfRenderer,  # Dependência da Interface (abstração)
-            temp_dir: Path,
+        self,
+        markdown_service: MarkdownService,
+        document_service: PdfDocumentService,
+        renderer: IPdfRenderer,  # Dependência da Interface (abstração)
+        temp_dir: Path,
     ):
         self.markdown_service = markdown_service
         self.document_service = document_service
@@ -26,9 +26,7 @@ class PdfService:
         document = self.document_service.build_html(title=title, body=html_content)
 
         file_name = self._safe_file_name(title)
-        output_dir = Path(
-            tempfile.mkdtemp(prefix="document-", dir=self.temp_dir)
-        )
+        output_dir = Path(tempfile.mkdtemp(prefix="document-", dir=self.temp_dir))
 
         html_file = output_dir / f"{file_name}.html"
         pdf_file = output_dir / f"{file_name}.pdf"

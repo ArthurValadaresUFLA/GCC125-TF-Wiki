@@ -2,10 +2,11 @@ from pathlib import Path
 from wiki.models.wiki_page import WikiPage
 from wiki.interfaces import IWikiRepository
 
+
 class FileWikiRepository(IWikiRepository):
     def __init__(self, wiki_dir: Path):
         self.wiki_dir = Path(wiki_dir)
-        self.wiki_dir.mkdir(parents=True, exist_ok=True) # Garante que exista
+        self.wiki_dir.mkdir(parents=True, exist_ok=True)  # Garante que exista
 
     def get_by_name(self, name: str) -> WikiPage | None:
         path = self.wiki_dir / f"{name}.md"

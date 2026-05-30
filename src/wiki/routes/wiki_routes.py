@@ -3,14 +3,17 @@ from wiki.container import ServicesContainer
 
 wiki_bp = Blueprint("wiki", __name__)
 
+
 def get_services() -> ServicesContainer:
     # Helper para recuperar serviços mantendo a tipagem limpa
     return current_app.extensions["services"]
+
 
 @wiki_bp.route("/")
 def index():
     wiki_service = get_services().wiki_service
     return render_template("index.html", pages=wiki_service.list_pages())
+
 
 @wiki_bp.route("/<page_name>")
 def page(page_name: str):
@@ -24,6 +27,7 @@ def page(page_name: str):
     html = services.markdown_service.render(markdown_content)
 
     return render_template("page.html", page=wiki_page, content=html)
+
 
 @wiki_bp.route("/<page_name>/pdf")
 def page_pdf(page_name: str):

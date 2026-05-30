@@ -1,8 +1,10 @@
 from wiki.models.wiki_page import WikiPage
 from wiki.interfaces import IWikiRepository
 
+
 class WikiPageNotFoundError(LookupError):
     pass
+
 
 class WikiService:
     # Agora depende de uma Interface e não de uma implementação direta

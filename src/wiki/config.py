@@ -4,11 +4,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
 
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
@@ -24,18 +26,22 @@ class Config:
 
     JSON_SORT_KEYS = False
 
+
 class DevelopmentConfig(Config):
     DEBUG = True
     ENV = "development"
+
 
 class ProductionConfig(Config):
     DEBUG = False
     ENV = "production"
 
+
 class TestingConfig(Config):
     TESTING = True
     DEBUG = False
     ENV = "testing"
+
 
 def get_config():
     environment = os.getenv("FLASK_ENV", "production")
