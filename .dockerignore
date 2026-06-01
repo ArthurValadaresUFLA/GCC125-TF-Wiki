@@ -247,7 +247,7 @@ tokens.*
 **/instance/
 **/media/
 **/migrations/
-**/static/
+# **/static/
 **/staticfiles/
 **/uploads/
 ._*
@@ -276,3 +276,19 @@ alembic.ini
 db.sqlite3
 db.sqlite3-journal
 local_settings.py
+
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# IDEs e Editores
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# CI/CD e Repositório
+.github/
