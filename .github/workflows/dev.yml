@@ -1,0 +1,25 @@
+name: Python Package Wiki
+
+on:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+  test:
+    name: Dev Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install Dependencies
+        run: poetry install
+
+      - name: Run Tests
+        run: poetry run pytest
+
+      - name: Build Package
+        run: poetry build
