@@ -1,7 +1,7 @@
-name: Build e Push para o GHCR
+name: Build, Push e Release
 
 on:
-  pull_request:
+  push:
     branches: [ "master" ]
 
 env:
@@ -13,15 +13,22 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Baixar o código do repositório
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
+
+      - name: Extrair versão do pyproject.toml
+        id: extract_version
+        run: |
+          VERSION=$(grep -m 1 '^version = ' pyproject.toml | awk -F'"' '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Versão detectada: $VERSION"
 
       - name: Autenticar no Container Registry (GHCR)
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -29,17 +36,27 @@ jobs:
 
       - name: Extrair metadados (Tags e Labels)
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
+            type=raw,value=${{ steps.extract_version.outputs.version }}
             type=sha
 
       - name: Build e Push da Imagem Docker
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Criar Release no GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.extract_version.outputs.version }}
+          name: Release ${{ steps.extract_version.outputs.version }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
