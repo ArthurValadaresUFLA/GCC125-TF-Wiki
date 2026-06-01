@@ -13,8 +13,6 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
-
     # Resolvendo diretórios de forma robusta
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     WIKI_DIR = Path(os.getenv("WIKI_DIR", BASE_DIR / "wiki_data")).expanduser()
