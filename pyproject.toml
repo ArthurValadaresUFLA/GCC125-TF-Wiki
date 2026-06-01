@@ -16,14 +16,6 @@ dependencies = [
     "weasyprint (>=68.1,<69.0)"
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "black",
-    "isort",
-    "mypy"
-]
-
 [tool.poetry]
 packages = [
     { include = "wiki", from = "src" }
@@ -37,3 +29,10 @@ include = [
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.0.3,<10.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)",
+    "pytest-mock (>=3.15.1,<4.0.0)"
+]
