@@ -1,9 +1,13 @@
+version: '3.8'
+
 services:
-  wiki-app:
-    build: .
-    container_name: wiki_prod
+  wiki:
+    image: ghcr.io/arthurvaladaresufla/gcc125-tf-wiki:latest
+    container_name: wiki
+    restart: always
     ports:
+      - "80:80"
+      - "443:443"
       - "5000:5000"
     volumes:
       - "/var/www/wiki:/app/data"
-    restart: unless-stopped
