@@ -1,38 +1,95 @@
 [project]
 name = "wiki"
-version = "1.0.0"
-description = "Aplicação web para navegação e exportação de páginas Markdown em formato wiki."
+version = "2.0.0"
+description = "Serviço web que publica uma pasta de arquivos Markdown como páginas HTML (com PDF via impressão e downloads)."
 authors = [
-    { name = "Arthur Valadares Campideli", email = "arthur.c.valadares@gmail.com" }
+    { name = "Arthur Valadares Campideli", email = "arthur.c.valadares@gmail.com" },
 ]
 readme = "README.md"
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.11"
+# Em uma aplicação, quem fixa versões é o uv.lock; aqui ficam só os pisos.
 dependencies = [
-    "flask>=3.1.3,<4.0.0",
-    "markdown>=3.10.2,<4.0.0",
-    "pygments>=2.20.0,<3.0.0",
-    "gunicorn>=23.0.0,<24.0.0",
-    "python-dotenv>=1.0.1,<2.0.0",
-    "weasyprint (>=68.1,<69.0)"
+    "flask>=3.1.3",
+    "markdown-it-py>=4.0.0",
+    "pygments>=2.20.0",
+    "gunicorn>=23.0.0",
 ]
 
-[tool.poetry]
-packages = [
-    { include = "wiki", from = "src" }
-]
-
-include = [
-    "src/wiki/static/**/*",
-    "src/wiki/templates/**/*"
+# Grupos de dependências (PEP 735): não vão para o pacote publicado.
+[dependency-groups]
+dev = ["pytest>=9.0.3,<10", "pytest-cov>=7.1.0,<8", "ruff>=0.9", "mypy>=1.14"]
+docs = [
+    "mkdocs>=2",             # MkDocs 2.x muda o modelo de plugins/temas: não subir sem testar
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
 ]
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+# O pino acompanha a versão do uv em uso (`uv --version`): mantenha o intervalo na mesma minor.
+requires = ["uv_build>=0.12.3,<0.13"]
+build-backend = "uv_build"
 
-[dependency-groups]
-dev = [
-    "pytest (>=9.0.3,<10.0.0)",
-    "pytest-cov (>=7.1.0,<8.0.0)",
-    "pytest-mock (>=3.15.1,<4.0.0)"
+# O uv_build empacota src/wiki (nome do projeto, normalizado) por padrão — nada a configurar.
+
+[tool.uv]
+# `uv sync` / `uv run` instalam estes grupos por padrão
+# No Docker use `uv sync --no-default-groups` para instalar só as dependências de produção.
+default-groups = ["dev", "docs"]
+
+# --------------------------------------------------------------------- ferramentas
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers --cov=wiki --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+source = ["wiki"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+    "if __name__ == .__main__.:",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "C4",  # comprehensions
+    "SIM", # simplificações
+    "S",   # bandit (segurança)
+    "D",   # docstrings
+    "RUF",
+]
+ignore = [
+    "D107", # o __init__ é documentado na docstring da classe (estilo Google)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "S101", "E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+files = ["src/wiki"]
+
+[[tool.mypy.overrides]]
+module = ["pygments", "pygments.*"]
+ignore_missing_imports = true

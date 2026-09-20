@@ -1,20 +1,45 @@
 {% extends "base.html" %}
 
-{% block title %}
-    {{ page.title }}
+{# Na versão de impressão o <base> faz links e imagens relativos se comportarem como em /<nome>. #}
+{% block head %}
+  {% if print_mode %}<base href="{{ url_for('wiki.page', name=page.info.slug) }}">{% endif %}
+{% endblock %}
+
+{% block title %}{{ page.info.title }}{% if not print_mode %} · {{ site_title }}{% endif %}{% endblock %}
+
+{% block nav_actions %}
+<ul>
+  <li><a href="{{ url_for('wiki.page', name=page.info.source_name) }}" download>Baixar .md</a></li>
+</ul>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1>{{ page.title }}</h1>
+{% if print_mode %}
+<aside class="print-hint no-print" role="note">
+  <p>
+    O diálogo de impressão abre automaticamente. Escolha <strong>Salvar como PDF</strong> como destino.
+  </p>
+  <button type="button" data-print>Imprimir / salvar como PDF</button>
+</aside>
+{% endif %}
 
-    <div class="actions">
-        <a href="/">Início</a>
-        <a href="/{{ page.name }}/pdf">Exportar PDF</a>
-    </div>
-</div>
+{% set toc = page.document.toc | selectattr('level', 'ge', 2) | selectattr('level', 'le', 3) | list %}
+{% if toc | length > 1 and not print_mode %}
+<details class="toc no-print">
+  <summary>Nesta página</summary>
+  <ul>
+    {% for entry in toc %}
+    <li class="toc-level-{{ entry.level }}"><a href="#{{ entry.anchor }}">{{ entry.title }}</a></li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
 
 <article class="markdown-body">
-    {{ content|safe }}
+  {{ page.document.html | safe }}
 </article>
+
+<p class="page-meta no-print">
+  <small>Atualizado em <time datetime="{{ page.info.modified.isoformat() }}">{{ page.info.modified.strftime('%Y-%m-%d %H:%M') }} UTC</time></small>
+</p>
 {% endblock %}
