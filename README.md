@@ -1,146 +1,142 @@
-# Servidor Web Wiki - GCC125
+# Wiki
 
-Servidor web desenvolvido para o trabalho de instalação e configuração da disciplina GCC125@Hermes.
+Serviço web pequeno que publica uma **pasta** de arquivos como uma wiki:
 
-## Sobre o Projeto
+- cada `.md` vira uma página HTML, com realce de código (Pygments), tabelas, índice "Nesta página"
+  e modo escuro automático;
+- os demais arquivos (planilhas, PDFs, imagens…) são listados como **downloads**;
+- qualquer página pode ser baixada como **`.md`** ou como **PDF** (gerado pelo navegador com
+  `@media print`, sem bibliotecas de PDF no servidor).
 
-Este projeto consiste em um sistema de Wiki leve e dinâmico, baseado em arquivos Markdown. A aplicação lê arquivos Markdown locais, renderiza-os como páginas HTML e oferece a funcionalidade de exportação nativa de relatórios ou páginas da Wiki para o formato PDF. O projeto foi construído priorizando a separação de responsabilidades (Serviços, Repositórios, Rotas), alta cobertura de testes e automação de entrega contínua.
+Sem banco de dados, sem login, sem estado: a pasta é a única fonte da verdade.
 
-### Tecnologias Utilizadas
+## Rotas
 
-* **Backend:** Python 3.11+ e Flask
-* **Gerenciamento de Pacotes:** Poetry
-* **Processamento de Documentos:** Markdown e WeasyPrint (renderização de PDFs)
-* **Testes:** Pytest com pytest-cov
-* **Infraestrutura:** Docker e GitHub Container Registry (GHCR)
-* **CI/CD:** GitHub Actions
+| Rota            | O que faz                                                                        |
+|-----------------|----------------------------------------------------------------------------------|
+| `/`             | Índice: páginas (agrupadas por pasta) e arquivos para download                   |
+| `/<nome>`       | Exibe `<nome>.md`; se não houver página, baixa o arquivo `<nome>`                |
 
----
+Exemplos: `/guia/instalacao` (página), `/guia/instalacao.md` (Markdown original),
+`/dados/vendas.csv` (download).
 
-## Pré-requisitos
+## Início rápido
 
-Para rodar e modificar este projeto localmente, você precisará ter instalado em sua máquina:
-
-* Python 3.11 ou superior
-* Pipx (recomendado para instalar o Poetry isoladamente)
-* Poetry (gerenciador de dependências e ambientes virtuais)
-* Docker (para testes de container e build)
-* Bibliotecas de sistema necessárias para o WeasyPrint (Pango, cairo, GDK-PixBuf). *Nota: O Docker resolve estas dependências automaticamente no ambiente de produção.*
-
----
-
-## Ambiente de Desenvolvimento (Setup Local)
-
-O ambiente de desenvolvimento é gerenciado inteiramente pelo Poetry, o que garante a consistência das dependências.
-
-**1. Clonar o repositório:**
+### Docker
 
 ```bash
-git clone https://github.com/ArthurValadaresUFLA/GCC125-TF-Wiki.git
-cd gcc-tf-wiki
-
+uv lock                      # gera/atualiza o uv.lock (uma vez, após mudar dependências)
+docker build -t wiki .
+docker run --rm -p 5000:5000 -v "$PWD/examples/content:/app/data:ro" wiki
 ```
 
-**2. Instalar dependências da aplicação e de desenvolvimento:**
+Abra <http://localhost:5000>. Para publicar a sua pasta, troque o caminho antes de `:/app/data`.
+Trocar a cor do tema: `docker build --build-arg PICO_VARIANT=jade -t wiki .`
+
+### Docker Compose
 
 ```bash
-poetry install
-
+docker compose up --build
 ```
 
-**3. Executar o servidor de desenvolvimento:**
+### Local (desenvolvimento)
 
 ```bash
-# Definindo as variáveis de ambiente necessárias
-export FLASK_ENV=development
-export FLASK_APP=src/wiki/app.py
-
-# Iniciando a aplicação
-poetry run flask run --host=0.0.0.0 --port=5000
-
+uv sync
+make assets        # baixa o tema (Pico CSS) para src/wiki/static/vendor
+make run           # http://127.0.0.1:5000 com examples/content
+make run CONTENT=~/minhas-notas
 ```
 
-Acesse a aplicação em `http://localhost:5000`.
+## Configuração
 
----
+Tudo por variáveis de ambiente, definidas ao criar o container:
 
-## Estrutura do Projeto
+| Variável          | Padrão                          | Descrição |
+|-------------------|---------------------------------|-----------|
+| `WIKI_DIR`        | `data` (`/app/data` na imagem)  | Pasta publicada (monte como volume `:ro`) |
+| `WIKI_TITLE`      | `Wiki`                          | Título do site |
+| `WIKI_LANG`       | `pt-BR`                         | Atributo `lang` do HTML |
+| `WIKI_ALLOW_HTML` | `false`                         | Preserva HTML cru dentro do Markdown |
+| `WIKI_THEME_CSS`  | `vendor/pico.classless.min.css` | Tema: caminho em `static/` ou URL `https://…` |
+| `WIKI_CACHE_SIZE` | `128`                           | Páginas renderizadas mantidas em memória |
+| `WEB_CONCURRENCY` | `2` (imagem)                    | *Workers* do Gunicorn |
 
-A arquitetura do projeto segue um padrão modularizado, garantindo fácil manutenção e testes limpos.
+## Regras do conteúdo
 
-```text
-├── src/
-│   └── wiki/
-│       ├── models/        # Entidades e modelos de dados (ex: WikiPage)
-│       ├── repositories/  # Acesso aos dados no disco (ex: FileWikiRepository)
-│       ├── routes/        # Blueprints e endpoints da API Flask
-│       ├── services/      # Regras de negócio (Markdown, PDF, WeasyPrint)
-│       ├── static/        # Arquivos estáticos (CSS)
-│       └── templates/     # Templates HTML (Jinja2)
-├── tests/                 # Suíte de testes unitários isolados
-├── wiki_data/             # Diretório padrão onde os arquivos .md da Wiki são armazenados
-├── pyproject.toml         # Configuração do Poetry e metadados do projeto
-└── Dockerfile             # Receita para a construção da imagem da aplicação
+- **Página** = arquivo terminado em `.md`. O título é o primeiro `# Título` (ou o nome do arquivo).
+- **Ordem** por pasta e nome de arquivo — prefixe com `01-`, `02-` para controlar.
+- **Links entre páginas** funcionam como no GitHub: `[x](outra.md)`, `[x](../guia/y.md#secao)`.
+- **Imagens** relativas (`![x](img/a.png)`) funcionam.
+- **Downloads** = qualquer arquivo que não seja `.md`.
+- **Nunca publicados**: nomes iniciados por `.` (`.git`, `.env`), e links simbólicos que apontem
+  para fora da pasta.
+- Suporte a Markdown: CommonMark + tabelas + ~~tachado~~. Rodapés e listas de tarefas não são
+  incluídos, mas podem ser adicionados com plugins do `markdown-it` (ver *Estendendo*).
+
+## Impressão e PDF (`@media print`)
+
+Ao **Salvar como PDF**, em qualquer página, o layout de impressão:
+
+- remove cabeçalho, rodapé, índice e botões;
+- força fundo branco e texto preto (mesmo com o navegador em modo escuro);
+- evita títulos órfãos e não parte tabelas, citações e imagens no meio;
+- repete o cabeçalho das tabelas em cada folha e quebra linhas de código longas;
+- imprime a URL ao lado dos links externos;
+- usa o título da página como nome sugerido do arquivo PDF.
+
+As regras estão em [`src/wiki/static/css/wiki.css`](src/wiki/static/css/wiki.css), seção 3.
+
+## Estrutura
 
 ```
+src/wiki/
+├── app.py          # application factory + composition root
+├── config.py       # Settings (WIKI_*)
+├── views.py        # 3 rotas (class-based views)
+├── service.py      # WikiService (Facade)
+├── repository.py   # ContentRepository / FileSystemRepository + segurança de caminhos
+├── rendering.py    # Renderer / MarkdownItRenderer / CachedRenderer
+├── cache.py        # LRUCache thread-safe
+├── security.py     # CSP e cabeçalhos
+├── models.py       # objetos de valor imutáveis
+├── exceptions.py
+├── static/         # wiki.css (inclui @media print), pygments.css, wiki.js
+└── templates/      # base, index, page, error
+```
 
----
+Padrões aplicados: *Application Factory*, *Repository*, *Strategy* (`Renderer`), *Decorator*
+(`CachedRenderer`), *Facade* (`WikiService`), injeção de dependência e objetos de valor. Detalhes,
+diagramas e o fluxo de uma requisição em [`docs/architecture.md`](docs/architecture.md).
 
-## Testes e Cobertura
+## Segurança
 
-O projeto possui uma suíte de testes unitários focados na validação das lógicas de serviço, mapeamento de arquivos locais e processamento do WeasyPrint.
+- Bloqueio de *path traversal*, arquivos ocultos e *symlinks* que escapam da pasta.
+- Downloads sempre como anexo (`Content-Disposition: attachment`) e com `nosniff`.
+- HTML dentro do Markdown é escapado por padrão; a CSP proíbe scripts e estilos inline
+  (mesmo com `WIKI_ALLOW_HTML=true`).
+- Imagem roda como usuário sem privilégios; com Compose, também com sistema de arquivos
+  somente leitura e sem *capabilities*.
+- **Não há autenticação**: se o conteúdo é privado, proteja a wiki no proxy reverso.
 
-Para executar a suíte de testes e gerar o relatório de cobertura de código no terminal, utilize:
+## Desenvolvimento
 
 ```bash
-poetry run pytest --cov=src/wiki tests/ --cov-report=term-missing
-
+make test        # pytest + cobertura
+make lint        # ruff
+make typecheck   # mypy --strict
+make docs        # documentação (MkDocs Material + mkdocstrings) em site/
+make docs-serve  # http://127.0.0.1:8000
+make help        # lista tudo
 ```
 
----
+### Estendendo
 
-## Executando com Docker
+- **Outro motor de Markdown**: implemente `wiki.rendering.Renderer`.
+- **Plugins do markdown-it** (rodapés, task lists…): `MarkdownItRenderer(plugins=[...])`.
+- **Outra origem de conteúdo** (S3, Git…): implemente `wiki.repository.ContentRepository`.
 
-Você pode rodar a aplicação através de containers Docker, isolando a infraestrutura e evitando a necessidade de instalar dependências complexas (como as bibliotecas C do WeasyPrint) na sua máquina local.
+## Limitações conhecidas
 
-### 1. Utilizando a Imagem Oficial (Docker Pull)
-
-O repositório está configurado com um pipeline de CI/CD que compila e publica a imagem Docker no GitHub Container Registry (GHCR) toda a vez que alterações são mescladas na branch `master`.
-
-Para baixar e executar a imagem mais recente do servidor:
-
-```bash
-# 1. Baixe a imagem gerada pelo GitHub Actions
-docker pull ghcr.io/seu-usuario/seu-repositorio:latest
-
-# 2. Execute o container mapeando a pasta local da wiki
-docker run -d \
-  -p 5000:5000 \
-  -v $(pwd)/wiki_data:/app/wiki_data \
-  --name wiki-server \
-  ghcr.io/seu-usuario/seu-repositorio:latest
-
-```
-
-### 2. Compilando Localmente (Docker Build)
-
-Caso tenha modificado o código e precise gerar a imagem do zero na sua própria máquina, execute:
-
-```bash
-# Construir a imagem localmente nomeando-a como "wiki-local"
-docker build -t wiki-local .
-
-# Executar a imagem recém-construída
-docker run -p 5000:5000 -v $(pwd)/wiki_data:/app/wiki_data wiki-local
-
-```
-
-### Variáveis de Ambiente Suportadas
-
-Durante a execução da aplicação ou do container, você pode customizar os comportamentos injetando as seguintes variáveis de ambiente:
-
-* `FLASK_ENV`: Define o modo da aplicação (`development`, `testing` ou `production`).
-* `APP_HOST`: IP onde o servidor ouvirá as conexões (Padrão: `0.0.0.0`).
-* `APP_PORT`: Porta de execução do Flask (Padrão: `5000`).
-* `WIKI_DIR`: Caminho absoluto do diretório contendo os arquivos Markdown (Padrão: `pasta_raiz/wiki_data`).
-* `PDF_TEMP_DIR`: Diretório temporário para conversão dos PDFs (Padrão: `/tmp/wiki-pdf`).
+- Arquivos `.MD` (maiúsculo) são tratados como downloads, não como páginas.
+- Pastas simbólicas não são listadas no índice.
