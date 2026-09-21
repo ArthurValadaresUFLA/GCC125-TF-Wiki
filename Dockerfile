@@ -15,13 +15,18 @@ FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 ############################################################
 FROM python:${PYTHON_VERSION}-slim AS assets
 
-# Variante de cor do Pico (ex.: jade, azure, amber). Vazio = tema padrão.
-ARG PICO_VARIANT=""
+ARG PICO_VARIANT="classless"
+ARG PICO_VERSION="2.0.6"
+ARG PICO_SRC_DIR="src/wiki/static/vendor/picocss"
+ARG PICO_APP_DIR="/app/src/wiki/static/vendor/picocss/current"
 
-WORKDIR /assets
-COPY scripts/fetch_assets.py ./
-RUN python fetch_assets.py --dest /assets/vendor ${PICO_VARIANT:+--variant "$PICO_VARIANT"}
+COPY ${PICO_SRC_DIR}/v${PICO_VERSION} ${PICO_APP_DIR}
 
+RUN set -eu; \
+    SRC="${PICO_APP_DIR}/pico${PICO_VARIANT:+.$PICO_VARIANT}.min.css"; \
+    DEST_DIR="$(dirname "${PICO_APP_DIR}")"; \
+    if [ ! -f "$SRC" ]; then echo "Variante inválida: $PICO_VARIANT" >&2; exit 1; fi; \
+    cp "$SRC" "${DEST_DIR}/pico.min.css"
 
 ############################################################
 # Stage 2 — builder: instala as dependências (exatamente as do uv.lock)
@@ -40,14 +45,16 @@ ENV UV_COMPILE_BYTECODE=1 \
 # Mesmo caminho do stage final: o venv usa caminhos absolutos e não é relocável
 WORKDIR /app
 
-# Só os manifestos entram (via bind mount, sem criar layer): este passo só é refeito quando
-# as dependências mudam. Flags:
+# Só os manifestos são copiados: esta layer (e a instalação abaixo) só é refeita quando as
+# dependências mudam. COPY em vez de `--mount=type=bind`, que falha com "Permission denied"
+# no Podman/Buildah (SELinux e user namespaces) e funciona igual no Docker.
+COPY pyproject.toml uv.lock ./
+
+# Flags:
 #   --locked              falha se o uv.lock estiver desatualizado em relação ao pyproject;
 #   --no-default-groups   ignora os grupos dev/docs (definidos em [tool.uv] default-groups);
 #   --no-install-project  não instala o projeto: o código roda direto de /app/src.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-default-groups --no-install-project
 
 
@@ -73,7 +80,7 @@ RUN groupadd --system --gid 10001 wiki \
 
 # Camadas ordenadas da que menos muda para a que mais muda
 COPY --from=builder /app/.venv ./.venv
-COPY --from=assets /assets/vendor ./src/wiki/static/vendor
+COPY --from=assets /app/src/wiki/static/vendor/picocss ./src/wiki/static/vendor/picocss
 COPY src ./src
 
 USER wiki
@@ -88,5 +95,6 @@ CMD ["gunicorn", \
      "--bind", "0.0.0.0:5000", \
      "--threads", "4", \
      "--worker-tmp-dir", "/dev/shm", \
+     "--control-socket", "/tmp/gunicorn.ctl", \
      "--access-logfile", "-", \
      "wiki:create_app()"]

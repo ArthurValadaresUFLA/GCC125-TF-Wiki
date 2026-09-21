@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unittest
-from typing import Any
+from typing import Any, ClassVar
 
 from flask import Flask
 from flask.testing import FlaskClient
@@ -17,10 +17,11 @@ from wiki.config import Settings
 class ViewsTestCase(ContentDirTestCase):
     """Sobe a aplicação sobre uma pasta temporária com conteúdo variado."""
 
-    settings_overrides: dict[str, object] = {}
+    settings_overrides: ClassVar[dict[str, object]] = {}
 
     def setUp(self) -> None:
         super().setUp()
+
         write_tree(
             self.content,
             {
@@ -168,7 +169,7 @@ class SecurityHeadersTests(ViewsTestCase):
 
     def test_local_theme_is_served_from_static(self) -> None:
         self.assertIn(
-            'href="/_static/vendor/pico.classless.min.css"',
+            'href="/_static/vendor/picocss/current/pico.min.css"',
             self.get("/").get_data(as_text=True),
         )
 
@@ -176,7 +177,7 @@ class SecurityHeadersTests(ViewsTestCase):
 class AllowHtmlTests(ViewsTestCase):
     """Com WIKI_ALLOW_HTML o HTML é preservado, mas a CSP continua barrando scripts."""
 
-    settings_overrides = {"allow_html": True}
+    settings_overrides: ClassVar[dict[str, object]] = {"allow_html": True}
 
     def test_html_is_preserved_but_csp_blocks_inline_scripts(self) -> None:
         response = self.get("/pagina-html")
