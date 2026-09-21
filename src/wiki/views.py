@@ -29,7 +29,8 @@ def _html_response(html: str) -> Response:
     response = Response(html, mimetype="text/html")
     response.headers["Cache-Control"] = "no-cache"
     response.add_etag()
-    return response.make_conditional(request)
+    response.make_conditional(request)
+    return response
 
 
 class _ServiceView(View):
