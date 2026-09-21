@@ -1,8 +1,4 @@
 # Configuração do pre-commit — https://pre-commit.com
-#
-#   make hooks          instala os hooks (commit e push) neste clone
-#   make lint           roda todos os hooks de commit em todos os arquivos
-#   make hooks-update   atualiza as versões (`rev`) abaixo para as mais recentes
 minimum_pre_commit_version: "3.2.0"
 
 # `pre-commit install` passa a instalar também o hook de pre-push (testes)
@@ -17,17 +13,17 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        args: [--markdown-linebreak-ext=md]  # preserva quebra de linha com dois espaços no Markdown
+        args: [--markdown-linebreak-ext=md] # preserva quebra de linha com dois espaços no Markdown
       - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: check-yaml
-        args: [--unsafe]                     # mkdocs.yml usa tags como !!python/name (só valida a sintaxe)
+        args: [--unsafe] # mkdocs.yml usa tags como !!python/name (só valida a sintaxe)
       - id: check-toml
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: check-executables-have-shebangs
-      - id: debug-statements                 # breakpoint(), pdb.set_trace()…
+      - id: debug-statements # breakpoint(), pdb.set_trace()…
       # segurança
       - id: detect-private-key
       - id: check-added-large-files
@@ -59,7 +55,7 @@ repos:
         language: system
         types: [python]
         files: ^src/
-        pass_filenames: false                # a lista de arquivos vem de [tool.mypy] no pyproject
+        pass_filenames: false # a lista de arquivos vem de [tool.mypy] no pyproject
 
       - id: pytest
         name: pytest
@@ -67,4 +63,4 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        stages: [pre-push]                   # lento demais para todo commit
+        stages: [pre-push] # lento demais para todo commit
