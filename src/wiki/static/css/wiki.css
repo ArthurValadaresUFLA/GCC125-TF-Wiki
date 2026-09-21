@@ -1,0 +1,218 @@
+/* ==========================================================================
+   wiki.css — ajustes sobre o tema (Pico CSS por padrão).
+
+   Organização:
+     1. Base de reserva   (baixa especificidade; o tema vence quando presente)
+     2. Componentes       (índice, lista de páginas, tabelas, código)
+     3. Impressão         (@media print — é aqui que nasce o PDF)
+
+   Para trocar as cores, sobrescreva as variáveis --pico-* (ver docs do Pico) ou
+   aponte WIKI_THEME_CSS para outro tema "classless".
+   ========================================================================== */
+
+/* 1. Base de reserva --------------------------------------------------------
+   `:where()` tem especificidade zero: se o tema estiver carregado, as regras dele
+   prevalecem; se não estiver, a página continua legível. */
+:where(html) {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+}
+:where(body > main) {
+  max-width: 52rem;
+  margin-inline: auto;
+  padding: 1rem;
+}
+:where(body > header nav) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  max-width: 52rem;
+  margin-inline: auto;
+  padding: 0.5rem 1rem;
+}
+:where(body > footer) {
+  max-width: 52rem;
+  margin-inline: auto;
+  padding: 1rem;
+}
+:where(nav ul) {
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+:where(pre, code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+:where(pre) {
+  overflow-x: auto;
+  padding: 0.75rem 1rem;
+  border-radius: 0.4rem;
+}
+:where(table) {
+  border-collapse: collapse;
+  width: 100%;
+}
+:where(th, td) {
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid #8884;
+}
+
+/* 2. Componentes ----------------------------------------------------------- */
+.brand {
+  text-decoration: none;
+}
+
+.page-list {
+  list-style: none;
+  padding: 0;
+}
+.page-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--pico-muted-border-color, #8884);
+}
+.page-list small,
+.page-meta {
+  color: var(--pico-muted-color, #777);
+}
+
+/* Tabelas largas rolam na horizontal em vez de estourar a tela. */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.toc ul {
+  list-style: none;
+  margin-bottom: 0;
+  padding-inline-start: 0.5rem;
+}
+.toc-level-3 {
+  margin-inline-start: 1.25rem;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+}
+.markdown-body pre {
+  font-size: 0.875em;
+}
+/* Os títulos com âncora não devem ficar escondidos sob o topo ao navegar por #id. */
+.markdown-body :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 1rem;
+}
+
+.print-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--pico-muted-border-color, #8884);
+  border-radius: 0.4rem;
+}
+.print-hint p {
+  margin: 0;
+}
+
+/* 3. Impressão --------------------------------------------------------------
+   Estas regras valem para Ctrl+P em qualquer página. */
+@page {
+  margin: 18mm 16mm;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11pt;
+  }
+
+  /* Some tudo o que é interface: cabeçalho, rodapé, índice, botões. */
+  .no-print,
+  body > header,
+  body > footer,
+  .toc,
+  .print-hint,
+  .page-meta {
+    display: none !important;
+  }
+
+  /* O documento ocupa toda a largura útil da folha, sem "cartão". */
+  body > main {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+  .markdown-body {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  /* Quebras de página: título nunca fica sozinho no fim; blocos curtos não se partem. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    break-after: avoid-page;
+    break-inside: avoid;
+  }
+  blockquote,
+  figure,
+  img,
+  tr {
+    break-inside: avoid;
+  }
+  p,
+  li {
+    orphans: 3;
+    widows: 3;
+  }
+  thead {
+    display: table-header-group; /* repete o cabeçalho da tabela em cada página */
+  }
+  img {
+    max-width: 100% !important;
+  }
+
+  /* Código: sem rolagem no papel — quebra a linha em vez de cortar. */
+  pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: visible;
+    border: 1px solid #ccc;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 9pt;
+  }
+
+  /* Links: sublinhados e, para os externos, com a URL impressa ao lado. */
+  a {
+    color: inherit !important;
+    text-decoration: underline;
+  }
+  .markdown-body a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+  }
+}

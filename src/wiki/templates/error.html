@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}{{ status }} · {{ site_title }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h1>{{ status }}</h1>
+  <p>{{ message }}</p>
+</hgroup>
+<p><a href="{{ url_for('wiki.index') }}">Voltar ao índice</a></p>
+{% endblock %}

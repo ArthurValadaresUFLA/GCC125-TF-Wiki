@@ -1,13 +1,25 @@
-version: '3.8'
-
 services:
   wiki:
-    image: ghcr.io/arthurvaladaresufla/gcc125-tf-wiki:latest
-    container_name: wiki
-    restart: always
+    build:
+      context: .
+      args:
+        PICO_VARIANT: ""          # ex.: jade, azure, amber (cor do tema)
+    image: wiki:latest
     ports:
-      - "80:80"
-      - "443:443"
       - "5000:5000"
+    environment:
+      WIKI_TITLE: "Minha Wiki"
+      # WIKI_ALLOW_HTML: "false"  # true preserva HTML cru dentro do Markdown
     volumes:
-      - "/var/www/wiki:/app/data"
+      # Pasta com os .md e demais arquivos. Somente leitura.
+      - ./examples/content:/app/data:ro
+    restart: unless-stopped
+
+    # Endurecimento: a aplicação só lê arquivos, não precisa escrever em disco nem de privilégios.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
