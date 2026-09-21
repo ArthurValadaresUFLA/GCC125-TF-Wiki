@@ -19,7 +19,7 @@ dependencies = [
 [dependency-groups]
 dev = ["pytest>=9.0.3,<10", "pytest-cov>=7.1.0,<8", "ruff>=0.9", "mypy>=1.14"]
 docs = [
-    "mkdocs>=2",             # MkDocs 2.x muda o modelo de plugins/temas: não subir sem testar
+    "mkdocs<2",                   # MkDocs 2.x muda o modelo de plugins/temas: não subir sem testar
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.27",
 ]
