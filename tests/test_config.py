@@ -40,7 +40,13 @@ class SettingsFromEnvTests(unittest.TestCase):
         self.assertEqual(settings.cache_size, 8)
 
     def test_boolean_spellings(self) -> None:
-        for raw, expected in [("1", True), ("TRUE", True), ("on", True), ("0", False), ("Não", False)]:
+        for raw, expected in [
+            ("1", True),
+            ("TRUE", True),
+            ("on", True),
+            ("0", False),
+            ("Não", False),
+        ]:
             with self.subTest(raw=raw):
                 self.assertIs(Settings.from_env({"WIKI_ALLOW_HTML": raw}).allow_html, expected)
 

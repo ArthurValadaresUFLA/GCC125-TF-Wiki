@@ -17,7 +17,9 @@ class MarkdownItRendererTests(unittest.TestCase):
     def test_title_and_toc(self) -> None:
         doc = self.renderer.render("# Olá *mundo*\n\n## Um\n\n### Dois\n")
         self.assertEqual(doc.title, "Olá mundo")
-        self.assertEqual([(e.level, e.title) for e in doc.toc], [(1, "Olá mundo"), (2, "Um"), (3, "Dois")])
+        self.assertEqual(
+            [(e.level, e.title) for e in doc.toc], [(1, "Olá mundo"), (2, "Um"), (3, "Dois")]
+        )
         self.assertIn('<h2 id="um">', doc.html)
 
     def test_document_without_h1_has_no_title(self) -> None:
@@ -55,7 +57,11 @@ class MarkdownItRendererTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;", html)
 
     def test_raw_html_is_kept_when_allowed(self) -> None:
-        html = MarkdownItRenderer(allow_html=True).render("<details><summary>x</summary></details>").html
+        html = (
+            MarkdownItRenderer(allow_html=True)
+            .render("<details><summary>x</summary></details>")
+            .html
+        )
         self.assertIn("<details>", html)
 
     def test_dangerous_link_schemes_are_not_linked(self) -> None:
