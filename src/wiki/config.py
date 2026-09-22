@@ -15,7 +15,7 @@ from pathlib import Path
 from wiki.exceptions import ConfigurationError
 
 DEFAULT_CONTENT_DIR = "data"
-DEFAULT_THEME_CSS = "vendor/picocss/current/pico.min.css"
+DEFAULT_THEME_CSS = "vendor/picocss/pico.min.css"
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on", "sim"})
 _FALSE_VALUES = frozenset({"0", "false", "no", "off", "nao", "não"})

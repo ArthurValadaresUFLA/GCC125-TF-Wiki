@@ -58,6 +58,9 @@ jobs:
             echo "Versão $VERSION nova: a imagem e o release serão criados."
           fi
 
+      - name: Gerar assets (PicoCSS)
+        run: make assets
+
       - name: Configurar o Docker Buildx
         uses: docker/setup-buildx-action@v4
 
