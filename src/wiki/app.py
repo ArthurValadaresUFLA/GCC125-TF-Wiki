@@ -1,60 +1,90 @@
-from flask import Flask
+"""Composição da aplicação: *application factory* e ligação das dependências."""
 
-from wiki.config import get_config
-from wiki.container import ServicesContainer
-from wiki.repositories.wiki_repository import FileWikiRepository
-from wiki.routes.wiki_routes import wiki_bp
-from wiki.services.markdown_service import MarkdownService
-from wiki.services.pdf_document_service import PdfDocumentService
-from wiki.services.pdf_renderer import WeasyPrintRenderer
-from wiki.services.pdf_service import PdfService
-from wiki.services.wiki_service import WikiService
+from __future__ import annotations
+
+from flask import Flask, render_template, url_for
+from werkzeug.exceptions import HTTPException
+
+from wiki.config import Settings
+from wiki.exceptions import ContentNotFoundError
+from wiki.rendering import CachedRenderer, MarkdownItRenderer
+from wiki.repository import FileSystemRepository
+from wiki.security import SecurityHeaders
+from wiki.service import WikiService
+from wiki.views import create_blueprint
 
 
-def create_app(config_object=None) -> Flask:
-    app = Flask(__name__)
-    app.config.from_object(config_object or get_config())
+def build_service(settings: Settings) -> WikiService:
+    """Monta o grafo de objetos do domínio (*composition root*).
 
-    register_extensions(app)
-    register_context_processors(app)
-    register_blueprints(app)
+    Args:
+        settings: Configuração da aplicação.
 
+    Returns:
+        Um :class:`~wiki.service.WikiService` com repositório de arquivos e renderizador
+        de Markdown com cache.
+
+    Raises:
+        ConfigurationError: Se a pasta de conteúdo não existir.
+    """
+    repository = FileSystemRepository(settings.content_dir)
+    renderer = CachedRenderer(
+        MarkdownItRenderer(allow_html=settings.allow_html),
+        document_cache_size=settings.cache_size,
+    )
+    return WikiService(repository, renderer)
+
+
+def create_app(settings: Settings | None = None) -> Flask:
+    """*Application factory* do Flask.
+
+    Os arquivos estáticos ficam em ``/_static`` (e não em ``/static``) para não colidir
+    com uma pasta ``static`` dentro do conteúdo publicado.
+
+    Args:
+        settings: Configuração. Se omitida, é lida das variáveis de ambiente ``WIKI_*``.
+
+    Returns:
+        A aplicação WSGI configurada.
+
+    Raises:
+        ConfigurationError: Se a configuração for inválida.
+    """
+    settings = settings or Settings.from_env()
+    app = Flask(__name__, static_url_path="/_static")
+    app.extensions["wiki.settings"] = settings
+
+    app.register_blueprint(create_blueprint(build_service(settings)))
+    SecurityHeaders(settings).install(app)
+    _register_template_context(app, settings)
+    _register_error_handlers(app)
     return app
 
 
-def register_extensions(app: Flask) -> None:
-    markdown_service = MarkdownService()
+def _register_template_context(app: Flask, settings: Settings) -> None:
+    """Disponibiliza em todos os templates o título, o idioma e a URL do tema."""
 
-    wiki_repository = FileWikiRepository(app.config["WIKI_DIR"])
-    wiki_service = WikiService(repository=wiki_repository)
-
-    pdf_document_service = PdfDocumentService(static_dir=app.config["STATIC_DIR"])
-
-    pdf_renderer = WeasyPrintRenderer()
-
-    pdf_service = PdfService(
-        markdown_service=markdown_service,
-        document_service=pdf_document_service,
-        renderer=pdf_renderer,
-        temp_dir=app.config["PDF_TEMP_DIR"],
-    )
-
-    # Armazenando todos os serviços em um único contêiner tipado
-    app.extensions["services"] = ServicesContainer(
-        markdown_service=markdown_service,
-        wiki_service=wiki_service,
-        pdf_service=pdf_service,
-    )
-
-
-def register_context_processors(app: Flask) -> None:
     @app.context_processor
-    def inject_global_data():
-        services: ServicesContainer = app.extensions["services"]
+    def inject_globals() -> dict[str, str]:
+        theme = settings.theme_css
+        if not settings.theme_is_remote:
+            theme = url_for("static", filename=theme)
         return {
-            "pages": services.wiki_service.list_pages(),
+            "site_title": settings.site_title,
+            "language": settings.language,
+            "theme_href": theme,
         }
 
 
-def register_blueprints(app: Flask) -> None:
-    app.register_blueprint(wiki_bp)
+def _register_error_handlers(app: Flask) -> None:
+    """Converte "conteúdo não encontrado" (e demais erros HTTP) em páginas amigáveis."""
+
+    @app.errorhandler(ContentNotFoundError)
+    @app.errorhandler(404)
+    def not_found(_error: Exception) -> tuple[str, int]:
+        return render_template("error.html", status=404, message="Página não encontrada."), 404
+
+    @app.errorhandler(HTTPException)
+    def http_error(error: HTTPException) -> tuple[str, int]:
+        status = error.code or 500
+        return render_template("error.html", status=status, message=error.name), status

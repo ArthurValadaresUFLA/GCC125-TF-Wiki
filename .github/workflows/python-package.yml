@@ -2,33 +2,103 @@ name: Python Package Wiki
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: ["dev"]
   pull_request:
-    branches: [ "dev" ]
+    branches: ["dev", "master"]
+  # Reutilizado por docker-publish.yml: nada é publicado sem passar por aqui.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Só cancela execuções antigas de PRs; nunca as que antecedem uma publicação.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Mesma minor exigida em [build-system] do pyproject.toml (uv_build>=0.12,<0.13)
+  UV_VERSION: "0.12.x"
 
 jobs:
-  test:
-    name: Dev Test
+  lint:
+    name: Lint (pre-commit)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Baixar o código do repositório
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Instalar o Poetry
-        run: pipx install poetry
-
-      - name: Configurar o Python e o Cache
-        uses: actions/setup-python@v5
+      - name: Instalar o uv
+        uses: astral-sh/setup-uv@v10.0.0
         with:
-          python-version: "3.11"
-          cache: "poetry"
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
 
-      - name: Instalar Dependências
-        run: poetry install --no-interaction
+      # Roda os mesmos hooks do `make lint`: ruff, mypy, uv-lock (uv.lock em dia) e higiene.
+      # O hook de pytest é de pre-push, então não entra aqui (os testes estão no job abaixo).
+      - name: Rodar os hooks do pre-commit
+        run: uvx --with pre-commit-uv pre-commit run --all-files --show-diff-on-failure --color always
 
-      - name: Rodar Testes e Gerar Relatório de Cobertura
-        run: poetry run pytest --cov=src/wiki tests/
+  test:
+    name: Testes (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-      - name: Build Package
-        run: poetry build
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v6
+
+      - name: Instalar o uv e o Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v10.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      # --locked falha se o uv.lock estiver desatualizado; só o grupo dev é necessário.
+      - name: Instalar dependências
+        run: uv sync --locked --no-default-groups --group dev
+
+      # A cobertura (--cov=wiki e relatório no terminal) já vem de [tool.pytest.ini_options].
+      - name: Rodar testes com cobertura
+        run: uv run --no-sync pytest
+
+      - name: Publicar resumo de cobertura
+        if: matrix.python-version == '3.12'
+        run: uv run --no-sync coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build do pacote
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v6
+
+      - name: Instalar o uv
+        uses: astral-sh/setup-uv@v10.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Gerar sdist e wheel
+        run: uv build
+
+      - name: Conferir o conteúdo do wheel
+        run: |
+          unzip -l dist/*.whl
+          unzip -l dist/*.whl | grep -q "wiki/templates/base.html"
+          unzip -l dist/*.whl | grep -q "wiki/static/css/wiki.css"
+
+      - name: Importar o wheel em um ambiente limpo
+        run: uv run --isolated --no-project --with dist/*.whl python -c "from wiki import create_app; print('wheel ok')"

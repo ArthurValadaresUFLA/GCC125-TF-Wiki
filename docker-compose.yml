@@ -1,22 +1,25 @@
-version: "3.8"
-
 services:
   wiki:
-    image: ghcr.io/arthurvaladaresufla/gcc125-tf-wiki:latest
-    container_name: wiki
-    restart: always
-    expose:
-      - "5000"
-    volumes:
-      - "/var/www/wiki:/app/data"
-
-  nginx:
-    image: nginx:alpine
-    container_name: wiki-nginx
-    restart: always
+    build:
+      context: .
+      args:
+        PICO_VARIANT: ""          # ex.: jade, azure, amber (cor do tema)
+    image: wiki:latest
     ports:
-      - "80:80"
+      - "5000:5000"
+    environment:
+      WIKI_TITLE: "Minha Wiki"
+      # WIKI_ALLOW_HTML: "false"  # true preserva HTML cru dentro do Markdown
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - wiki
+      # Pasta com os .md e demais arquivos. Somente leitura.
+      - ./examples/content:/app/data:ro
+    restart: unless-stopped
+
+    # Endurecimento: a aplicação só lê arquivos, não precisa escrever em disco nem de privilégios.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

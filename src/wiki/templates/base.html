@@ -1,37 +1,33 @@
 <!doctype html>
-<html lang="pt-br">
-  <head>
-    <meta charset="utf-8" />
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  {% block head %}{% endblock %}
+  <title>{% block title %}{{ site_title }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ theme_href }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pygments.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/wiki.css') }}">
+</head>
+<body{% if auto_print %} data-autoprint{% endif %}>
+  <header class="no-print">
+    <nav>
+      <ul>
+        <li><a class="brand" href="{{ url_for('wiki.index') }}"><strong>{{ site_title }}</strong></a></li>
+      </ul>
+      {% block nav_actions %}{% endblock %}
+    </nav>
+  </header>
 
-    <title>{% block title %} Wiki {% endblock %}</title>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
 
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <footer class="no-print">
+    <small>{% block footer %}Servido por Wiki{% endblock %}</small>
+  </footer>
 
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/app.css') }}"
-    />
-
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/markdown.css') }}"
-    />
-
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/pygments.css') }}"
-    />
-
-    <script defer src="{{ url_for('static', filename='js/app.js') }}"></script>
-  </head>
-
-  <body>
-    {% include "components/navbar.html" %}
-
-    <div class="layout">
-      {% include "components/sidebar.html" %}
-
-      <main class="content">{% block content %} {% endblock %}</main>
-    </div>
-  </body>
+  <script src="{{ url_for('static', filename='js/wiki.js') }}" defer></script>
+</body>
 </html>
