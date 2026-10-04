@@ -1,9 +1,14 @@
-"""Wiki: serviço web que publica uma pasta de arquivos Markdown como páginas HTML.
+"""Wiki: a web service that publishes a folder of Markdown files as HTML pages.
 
-O ponto de entrada é a *application factory* :func:`wiki.app.create_app`, reexportada
-aqui por conveniência::
+The entry point is the *application factory* :func:`wiki.app.create_app`, re-exported
+here for convenience so that WSGI servers can locate it without importing the
+``wiki.app`` module directly::
 
     gunicorn "wiki:create_app()"
+
+See :mod:`wiki.config` for the environment variables that configure the application,
+and :mod:`wiki.app` for how the dependency graph (repository, renderer, service and
+views) is assembled.
 """
 
 from wiki.app import create_app

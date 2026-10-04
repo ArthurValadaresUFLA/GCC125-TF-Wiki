@@ -1,9 +1,10 @@
-"""Acesso ao conteúdo publicado (padrão *Repository*).
+"""Access to the published content (*Repository* pattern).
 
-:class:`ContentRepository` define o contrato que o restante da aplicação enxerga;
-:class:`FileSystemRepository` é a implementação que lê de uma pasta local. Toda a
-lógica de segurança de caminhos (path traversal, arquivos ocultos, *symlinks* que
-escapam da raiz) fica concentrada aqui.
+:class:`ContentRepository` defines the contract the rest of the application sees;
+:class:`FileSystemRepository` is the implementation that reads from a local folder.
+All of the path-safety logic — path traversal, hidden files, symlinks that escape the
+content root — is concentrated here, so every other layer can treat a validated name
+as trustworthy.
 """
 
 from __future__ import annotations
@@ -18,80 +19,89 @@ from wiki.models import SourceFile
 
 
 class ContentRepository(ABC):
-    """Contrato de acesso ao conteúdo, independente de onde ele está armazenado."""
+    """Contract for accessing content, independent of where it is actually stored.
+
+    Implementing this against, say, an in-memory dictionary or a remote object store
+    is enough to reuse :class:`wiki.service.WikiService` unchanged — see
+    ``tests/test_service.py`` for an in-memory example used purely for unit testing.
+    """
 
     @abstractmethod
     def list_files(self) -> tuple[SourceFile, ...]:
-        """Lista todos os arquivos visíveis, ordenados por pasta e nome."""
+        """List every visible file, ordered by folder and then by name."""
 
     @abstractmethod
     def stat(self, name: str) -> SourceFile:
-        """Devolve os metadados de um arquivo.
+        """Return the metadata for a file.
 
         Args:
-            name: Caminho relativo à raiz, com ``/`` como separador.
+            name: Path relative to the content root, using ``/`` as the separator.
 
         Raises:
-            ContentNotFoundError: Se o arquivo não existir ou não puder ser exposto.
+            ContentNotFoundError: If the file does not exist or must not be exposed.
         """
 
     @abstractmethod
     def read_text(self, name: str) -> str:
-        """Lê um arquivo de texto UTF-8 (com ou sem BOM).
+        """Read a UTF-8 text file (with or without a byte-order mark).
 
         Raises:
-            ContentNotFoundError: Se o arquivo não existir ou não puder ser exposto.
+            ContentNotFoundError: If the file does not exist or must not be exposed.
         """
 
     @abstractmethod
     def path_of(self, name: str) -> Path:
-        """Devolve o caminho absoluto e validado de um arquivo, para envio ao cliente.
+        """Return the absolute, validated path of a file, ready to be sent to a client.
 
         Raises:
-            ContentNotFoundError: Se o arquivo não existir ou não puder ser exposto.
+            ContentNotFoundError: If the file does not exist or must not be exposed.
         """
 
 
 def _is_hidden(part: str) -> bool:
-    """Nomes iniciados por ponto (``.git``, ``.env``…) nunca são publicados."""
+    """Names starting with a dot (``.git``, ``.env``, …) are never published."""
     return part.startswith(".")
 
 
 def _sort_key(source: SourceFile) -> tuple[str, str]:
-    """Ordena por pasta (a raiz primeiro) e, dentro dela, por nome sem distinguir caixa."""
+    """Sort by folder (content root first), then case-insensitively by filename."""
     folder, _, base = source.name.rpartition("/")
     return folder.casefold(), base.casefold()
 
 
 class FileSystemRepository(ContentRepository):
-    """Repositório que publica o conteúdo de uma pasta do sistema de arquivos.
+    """A repository that publishes the contents of a folder on the local filesystem.
 
-    Regras de exposição:
+    Rules governing exposure:
 
-    * arquivos e pastas cujo nome começa com ``.`` são ignorados;
-    * *symlinks* para arquivos são aceitos apenas se o destino estiver dentro da raiz;
-    * *symlinks* para pastas não são percorridos na listagem.
+    * Files and folders whose name starts with ``.`` are ignored entirely.
+    * A symlink to a *file* is only accepted if its target resolves to somewhere
+      inside the content root — this is the primary defence against a symlink being
+      used to read files elsewhere on disk (e.g. ``/etc/passwd``).
+    * A symlink to a *folder* is never followed while listing content
+      (``os.walk(..., followlinks=False)``), which also prevents infinite loops from
+      a symlink that points back to an ancestor of itself.
 
     Args:
-        root: Pasta raiz do conteúdo.
+        root: Root folder of the content.
 
     Raises:
-        ConfigurationError: Se ``root`` não for uma pasta existente.
+        ConfigurationError: If ``root`` is not an existing folder.
     """
 
     def __init__(self, root: Path | str) -> None:
         resolved = Path(root).expanduser().resolve()
         if not resolved.is_dir():
-            raise ConfigurationError(f"A pasta de conteúdo não existe: {resolved}")
+            raise ConfigurationError(f"The content folder does not exist: {resolved}")
         self._root = resolved
 
     @property
     def root(self) -> Path:
-        """Pasta raiz (caminho absoluto, já resolvido)."""
+        """Root folder (absolute, already-resolved path)."""
         return self._root
 
     def list_files(self) -> tuple[SourceFile, ...]:
-        """Percorre a raiz e devolve os arquivos visíveis."""
+        """Walk the root folder and return the visible files."""
         found: list[SourceFile] = []
         for dirpath, dirnames, filenames in os.walk(self._root, followlinks=False):
             dirnames[:] = [d for d in dirnames if not _is_hidden(d)]
@@ -103,12 +113,12 @@ class FileSystemRepository(ContentRepository):
                 try:
                     found.append(self.stat(relative))
                 except ContentNotFoundError:
-                    continue  # link quebrado, fora da raiz ou removido durante a varredura
+                    continue  # broken link, escapes the root, or removed mid-scan
         found.sort(key=_sort_key)
         return tuple(found)
 
     def stat(self, name: str) -> SourceFile:
-        """Ver :meth:`ContentRepository.stat`."""
+        """See :meth:`ContentRepository.stat`."""
         normalized, path = self._locate(name)
         try:
             info = path.stat()
@@ -121,7 +131,7 @@ class FileSystemRepository(ContentRepository):
         )
 
     def read_text(self, name: str) -> str:
-        """Ver :meth:`ContentRepository.read_text`."""
+        """See :meth:`ContentRepository.read_text`."""
         _, path = self._locate(name)
         try:
             return path.read_text(encoding="utf-8-sig", errors="replace")
@@ -129,18 +139,24 @@ class FileSystemRepository(ContentRepository):
             raise ContentNotFoundError(name) from None
 
     def path_of(self, name: str) -> Path:
-        """Ver :meth:`ContentRepository.path_of`."""
+        """See :meth:`ContentRepository.path_of`."""
         return self._locate(name)[1]
 
     def _locate(self, name: str) -> tuple[str, Path]:
-        """Valida ``name`` e o converte em um caminho real dentro da raiz.
+        """Validate ``name`` and turn it into a real path inside the content root.
+
+        This is the single choke point through which every public method passes a
+        client-supplied name, which is what makes the security guarantees of this
+        class hold: nothing downstream ever sees an unvalidated path.
 
         Returns:
-            O nome normalizado (relativo, com ``/``) e o caminho absoluto resolvido.
+            The normalised name (relative, ``/``-separated) and the resolved absolute
+            path.
 
         Raises:
-            ContentNotFoundError: Para nomes vazios, absolutos, com ``..``, ocultos,
-                inexistentes ou cujo destino final escape da raiz.
+            ContentNotFoundError: For empty, absolute, ``..``-containing, hidden, or
+                non-existent names, and for any name whose final resolved target
+                escapes the content root.
         """
         if not name or "\x00" in name:
             raise ContentNotFoundError(name)

@@ -5,18 +5,18 @@
 {% block content %}
 <hgroup>
   <h1>{{ site_title }}</h1>
-  <p>{{ catalog.pages | length }} página(s) · {{ catalog.files | length }} arquivo(s) para download</p>
+  <p>{{ catalog.pages | length }} page(s) · {{ catalog.files | length }} file(s) to download</p>
 </hgroup>
 
 {% if not catalog.pages and not catalog.files %}
 <article>
-  <p>Nenhum conteúdo encontrado. Adicione arquivos <code>.md</code> à pasta configurada em <code>WIKI_DIR</code>.</p>
+  <p>No content found yet. Add <code>.md</code> files to the folder configured in <code>WIKI_DIR</code>.</p>
 </article>
 {% endif %}
 
 {% for folder, pages in catalog.page_groups() %}
 <section>
-  <h2>{{ folder if folder else "Páginas" }}</h2>
+  <h2>{{ folder if folder else "Pages" }}</h2>
   <ul class="page-list">
     {% for page in pages %}
     <li>
@@ -30,11 +30,11 @@
 
 {% if catalog.files %}
 <section>
-  <h2>Arquivos para download</h2>
+  <h2>Downloadable files</h2>
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th scope="col">Arquivo</th><th scope="col">Tamanho</th><th scope="col">Modificado</th></tr>
+        <tr><th scope="col">File</th><th scope="col">Size</th><th scope="col">Modified</th></tr>
       </thead>
       <tbody>
         {% for file in catalog.files %}

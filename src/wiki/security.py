@@ -1,4 +1,4 @@
-"""Cabeçalhos HTTP de segurança aplicados a todas as respostas."""
+"""HTTP security headers applied to every response."""
 
 from __future__ import annotations
 
@@ -10,15 +10,20 @@ from wiki.config import Settings
 
 
 class SecurityHeaders:
-    """Adiciona ``Content-Security-Policy`` e outros cabeçalhos defensivos.
+    """Adds ``Content-Security-Policy`` and other defensive headers to every response.
 
-    A política é restritiva: sem scripts inline, sem formulários, sem *frames* e sem
-    conexões externas. Mesmo com ``WIKI_ALLOW_HTML=true``, um ``<script>`` escrito num
-    arquivo Markdown não executa. Se o tema for uma URL externa, apenas a origem dela é
-    liberada para estilos e fontes.
+    The policy is deliberately restrictive: no inline scripts, no forms, no frames,
+    and no external connections beyond what the configured theme explicitly needs.
+    Even with ``WIKI_ALLOW_HTML=true`` (see :class:`wiki.config.Settings`), a
+    ``<script>`` tag written into a Markdown file will not execute, because
+    ``script-src`` never includes ``'unsafe-inline'`` — the CSP, not Markdown
+    escaping, is what actually stops it in that case. If the theme is an external URL,
+    only that URL's origin is allow-listed for styles and fonts; everything else stays
+    blocked.
 
     Args:
-        settings: Configuração da aplicação (usada para descobrir a origem do tema).
+        settings: Application configuration (used to work out the theme's origin, if
+            any).
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -30,7 +35,7 @@ class SecurityHeaders:
 
     @staticmethod
     def _build_csp(settings: Settings) -> str:
-        """Monta o valor do cabeçalho ``Content-Security-Policy``."""
+        """Build the value of the ``Content-Security-Policy`` header."""
         theme_source = ""
         if settings.theme_is_remote:
             parts = urlsplit(settings.theme_css)
@@ -48,11 +53,11 @@ class SecurityHeaders:
         return "; ".join(directives)
 
     def __call__(self, response: Response) -> Response:
-        """Aplica os cabeçalhos à resposta (sem sobrescrever os já definidos)."""
+        """Apply the headers to the response, without overwriting any already set."""
         for name, value in self._headers.items():
             response.headers.setdefault(name, value)
         return response
 
     def install(self, app: Flask) -> None:
-        """Registra o objeto como *hook* ``after_request`` da aplicação."""
+        """Register this object as the application's ``after_request`` hook."""
         app.after_request(self)

@@ -1,1 +1,0 @@
-"""Testes da aplicação Wiki."""

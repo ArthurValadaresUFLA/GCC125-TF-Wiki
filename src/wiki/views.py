@@ -1,14 +1,16 @@
-"""Camada HTTP: as três rotas da aplicação, como *class-based views*.
+"""The HTTP layer: the application's routes, implemented as class-based views.
 
 =========================  ==================================================
-Rota                       Comportamento
+Route                      Behaviour
 =========================  ==================================================
-``/``                      Índice: páginas e arquivos para download.
-``/<nome>``                Página (``guia/x``) ou download de arquivo (``x.md``).
+``/``                      Index: pages and downloadable files.
+``/<name>``                A page (``guia/x``) or a file download (``x.md``).
 =========================  ==================================================
 
-Cada *view* recebe o :class:`~wiki.service.WikiService` no construtor (injeção de
-dependência), e é instanciada uma única vez (``init_every_request = False``).
+Each view receives the :class:`~wiki.service.WikiService` through its constructor
+(dependency injection), and is instantiated only once per application, rather than
+once per request (``init_every_request = False``) — the view itself is stateless, so
+there is nothing to gain from recreating it on every call.
 """
 
 from __future__ import annotations
@@ -21,10 +23,11 @@ from wiki.service import WikiService
 
 
 def _html_response(html: str) -> Response:
-    """Empacota HTML com ``ETag``, permitindo respostas ``304 Not Modified``.
+    """Wrap HTML with an ``ETag``, enabling conditional ``304 Not Modified`` responses.
 
-    ``Cache-Control: no-cache`` faz o navegador revalidar sempre, de modo que uma edição
-    no arquivo aparece imediatamente, mas sem retransferir o corpo se nada mudou.
+    ``Cache-Control: no-cache`` makes the browser always revalidate with the server,
+    so an edit to the underlying file is reflected immediately — but without
+    re-transferring the body when nothing has actually changed.
     """
     response = Response(html, mimetype="text/html")
     response.headers["Cache-Control"] = "no-cache"
@@ -34,7 +37,7 @@ def _html_response(html: str) -> Response:
 
 
 class _ServiceView(View):
-    """Base das *views*: guarda o serviço injetado e evita recriar a instância a cada request."""
+    """Base class for the views: holds the injected service and avoids re-instantiation."""
 
     init_every_request = False
 
@@ -43,26 +46,27 @@ class _ServiceView(View):
 
 
 class IndexView(_ServiceView):
-    """``GET /`` — lista as páginas (por pasta) e os arquivos para download."""
+    """``GET /`` — lists the pages (grouped by folder) and the downloadable files."""
 
     def dispatch_request(self) -> Response:
-        """Renderiza o índice."""
+        """Render the index page."""
         catalog = self._service.catalog()
         return _html_response(render_template("index.html", catalog=catalog))
 
 
 class PageView(_ServiceView):
-    """``GET /<nome>`` — exibe uma página ou envia um arquivo como anexo."""
+    """``GET /<name>`` — displays a page, or sends a file back as an attachment."""
 
     def dispatch_request(self, name: str) -> Response:  # type: ignore[override]
-        """Resolve ``name`` e responde de acordo com o tipo de recurso encontrado.
+        """Resolve ``name`` and respond according to the kind of resource found.
 
         Args:
-            name: Caminho recebido na URL.
+            name: Path segment received in the URL.
         """
         resource = self._service.resolve(name)
         if isinstance(resource, Download):
-            # Sempre como anexo: HTML/SVG enviados no download não executam na origem da wiki.
+            # Always as an attachment: HTML/SVG sent as a download never executes
+            # with the wiki's own origin, unlike a page rendered inline.
             return send_file(resource.path, as_attachment=True, download_name=resource.filename)
         return _html_response(self._render_page(resource))
 
@@ -72,13 +76,13 @@ class PageView(_ServiceView):
 
 
 def create_blueprint(service: WikiService) -> Blueprint:
-    """Cria o *blueprint* com as rotas, já ligado ao serviço informado.
+    """Create the blueprint holding the routes, already bound to the given service.
 
     Args:
-        service: Serviço injetado nas três *views*.
+        service: Service instance injected into all three views.
 
     Returns:
-        O ``Blueprint`` pronto para ser registrado na aplicação.
+        The ``Blueprint``, ready to be registered on the application.
     """
     blueprint = Blueprint("wiki", __name__)
     blueprint.add_url_rule("/", view_func=IndexView.as_view("index", service))

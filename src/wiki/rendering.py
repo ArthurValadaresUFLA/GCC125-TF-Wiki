@@ -1,13 +1,13 @@
-"""Conversão de Markdown em HTML.
+"""Conversion of Markdown into HTML.
 
-Estrutura:
+Structure:
 
-* :class:`Renderer` — contrato abstrato (*Strategy*): qualquer motor de Markdown que o
-  implemente pode ser plugado na aplicação.
-* :class:`MarkdownItRenderer` — implementação baseada em ``markdown-it-py`` com realce de
-  código via Pygments, tabelas, títulos com âncora e reescrita de links ``.md``.
-* :class:`CachedRenderer` — *Decorator* que memoriza resultados pelo conteúdo do texto,
-  de modo que só se reprocessa um arquivo quando ele muda.
+* :class:`Renderer` — the abstract contract (*Strategy* pattern): any Markdown engine
+  that implements it can be plugged into the application.
+* :class:`MarkdownItRenderer` — implementation built on ``markdown-it-py``, with syntax
+  highlighting via Pygments, tables, anchored headings, and rewriting of ``.md`` links.
+* :class:`CachedRenderer` — a *Decorator* that memoises results by the text's content,
+  so a file is only re-processed once, when it actually changes.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from wiki.cache import LRUCache
 from wiki.models import MARKDOWN_SUFFIX, RenderedDocument, TocEntry
 
 MarkdownPlugin = Callable[[MarkdownIt], None]
-"""Função que recebe a instância de ``MarkdownIt`` e registra regras extras nela."""
+"""A function that receives the ``MarkdownIt`` instance and registers extra rules on it."""
 
 _FORMATTER = HtmlFormatter(nowrap=True)
 _SAFE_LANGUAGE = re.compile(r"[\w+#.-]+")
@@ -44,26 +44,32 @@ _SLUG_SEPARATORS = re.compile(r"[\s-]+")
 
 
 class Renderer(ABC):
-    """Contrato de um conversor de Markdown em HTML."""
+    """Contract for something that converts Markdown into HTML."""
 
     @abstractmethod
     def render(self, text: str) -> RenderedDocument:
-        """Converte o texto Markdown em um documento HTML completo."""
+        """Convert the Markdown text into a complete HTML document."""
 
     @abstractmethod
     def title(self, text: str) -> str | None:
-        """Extrai apenas o título (primeiro ``#``), sem gerar o HTML.
+        """Extract only the title (first ``#`` heading), without generating HTML.
 
-        É bem mais barato que :meth:`render` e por isso usado para montar o índice.
+        This is considerably cheaper than :meth:`render` and is used purely to build
+        the index (see :meth:`wiki.service.WikiService.catalog`), where the full HTML
+        body is never needed.
         """
 
 
-# --------------------------------------------------------------------------- realce
+# --------------------------------------------------------------------------- highlighting
 
 
 @lru_cache(maxsize=128)
 def _lexer_for(language: str) -> Lexer:
-    """Localiza o *lexer* do Pygments para a linguagem, com texto puro como reserva."""
+    """Find the Pygments lexer for a language name, falling back to plain text.
+
+    Cached because looking up a lexer by name is comparatively expensive and the same
+    handful of languages (Python, JSON, Bash, …) tend to repeat across a whole site.
+    """
     if language:
         try:
             return get_lexer_by_name(language, stripnl=False)
@@ -73,29 +79,32 @@ def _lexer_for(language: str) -> Lexer:
 
 
 def highlight_code(code: str, language: str, _attrs: str = "") -> str:
-    """Realça um bloco de código cercado (```` ```python ````) com o Pygments.
+    """Highlight a fenced code block (```` ```python ````) using Pygments.
 
-    O HTML devolvido começa com ``<pre`` — o que faz o ``markdown-it-py`` usá-lo como está,
-    sem embrulhá-lo novamente. As cores vêm de classes CSS (ver ``pygments.css``).
+    The returned HTML starts with ``<pre``, which makes ``markdown-it-py`` use it
+    as-is rather than wrapping it again. Colours come from CSS classes (see
+    ``pygments.css``), not inline styles, which keeps the output compatible with the
+    strict ``style-src`` directive set by :class:`wiki.security.SecurityHeaders`.
 
     Args:
-        code: Conteúdo do bloco.
-        language: Linguagem informada após a cerca; vazia se não houver.
-        _attrs: Demais atributos da cerca (ignorados).
+        code: Contents of the block.
+        language: Language named after the fence; empty if none was given.
+        _attrs: Any further fence attributes (currently ignored).
 
     Returns:
-        HTML do bloco. Linguagens desconhecidas são exibidas sem realce.
+        HTML for the block. Unknown languages are shown without highlighting, but
+        still safely escaped.
     """
     body = highlight(code, _lexer_for(language), _FORMATTER)
     css_class = f' class="language-{language}"' if _SAFE_LANGUAGE.fullmatch(language) else ""
     return f'<pre class="highlight"><code{css_class}>{body}</code></pre>'
 
 
-# --------------------------------------------------------------------- regras extras
+# --------------------------------------------------------------------------- extra rules
 
 
 def _strip_markdown_suffix(href: str) -> str:
-    """Troca ``pagina.md#secao`` por ``pagina#secao``; URLs absolutas não mudam."""
+    """Turn ``page.md#section`` into ``page#section``; absolute URLs are left untouched."""
     parts = urlsplit(href)
     if parts.scheme or parts.netloc or not parts.path.endswith(MARKDOWN_SUFFIX):
         return href
@@ -104,7 +113,7 @@ def _strip_markdown_suffix(href: str) -> str:
 
 
 def _rewrite_links(state: StateCore) -> None:
-    """Regra de núcleo: links ``.md`` apontam para a página; imagens carregam sob demanda."""
+    """Core rule: ``.md`` links point to the rendered page; images are lazily loaded."""
     for block in state.tokens:
         if block.type != "inline" or not block.children:
             continue
@@ -118,7 +127,12 @@ def _rewrite_links(state: StateCore) -> None:
 
 
 def _plain_text(inline: Token) -> str:
-    """Extrai o texto puro (sem marcação) de um token ``inline``."""
+    """Extract the plain text (with no markup) from an ``inline`` token.
+
+    Used to build both the table of contents and the page title from a heading, which
+    must never contain HTML markup (an anchor's ``id`` attribute, or a ``<title>``
+    element, cannot safely hold arbitrary inline formatting).
+    """
     parts: list[str] = []
     for child in inline.children or []:
         if child.type in {"text", "code_inline", "image"}:
@@ -129,19 +143,25 @@ def _plain_text(inline: Token) -> str:
 
 
 def slugify(text: str) -> str:
-    """Gera um identificador de âncora estável a partir do texto de um título.
+    """Generate a stable anchor identifier from a heading's text.
 
-    Mantém letras acentuadas, troca espaços por hífens e remove pontuação.
+    Accented letters are kept as-is — useful for loanwords and non-English proper
+    nouns — whitespace becomes a hyphen, and punctuation is stripped entirely. A
+    heading with no usable characters left after cleaning (e.g. one made up solely of
+    punctuation) falls back to the generic anchor ``"section"``.
 
     Example:
-        ``slugify("Instalação & Uso")`` devolve ``"instalação-uso"``.
+        >>> slugify("Café & Résumé")
+        'café-résumé'
+        >>> slugify("???")
+        'section'
     """
     cleaned = _SLUG_INVALID.sub("", text.strip().lower())
-    return _SLUG_SEPARATORS.sub("-", cleaned).strip("-") or "secao"
+    return _SLUG_SEPARATORS.sub("-", cleaned).strip("-") or "section"
 
 
 def _unique_slug(text: str, used: dict[str, int]) -> str:
-    """Garante âncoras únicas no documento (``titulo``, ``titulo-1``, ``titulo-2``…)."""
+    """Ensure anchors are unique within a document (``title``, ``title-1``, ``title-2``…)."""
     base = slugify(text)
     count = used.get(base, 0)
     used[base] = count + 1
@@ -149,7 +169,12 @@ def _unique_slug(text: str, used: dict[str, int]) -> str:
 
 
 def _collect_headings(state: StateCore) -> None:
-    """Regra de núcleo: atribui ``id`` aos títulos e registra o índice e o título do texto."""
+    """Core rule: assign an ``id`` to each heading, and record the ToC and page title.
+
+    Only the *first* level-1 heading sets the page title — subsequent ``# Heading``
+    tokens (unusual, but not forbidden by CommonMark) are recorded in the table of
+    contents like any other heading, without overriding the title already found.
+    """
     toc: list[TocEntry] = []
     used: dict[str, int] = {}
     title: str | None = None
@@ -171,31 +196,35 @@ def _collect_headings(state: StateCore) -> None:
 def _table_open(
     self: RendererHTML, tokens: Sequence[Token], idx: int, options: OptionsDict, env: EnvType
 ) -> str:
-    """Envolve a tabela em um contêiner com rolagem horizontal (telas estreitas)."""
+    """Wrap the table in a container that scrolls horizontally on narrow screens."""
     return '<div class="table-wrap">' + self.renderToken(tokens, idx, options, env)
 
 
 def _table_close(
     self: RendererHTML, tokens: Sequence[Token], idx: int, options: OptionsDict, env: EnvType
 ) -> str:
-    """Fecha o contêiner aberto por :func:`_table_open`."""
+    """Close the container opened by :func:`_table_open`."""
     return self.renderToken(tokens, idx, options, env) + "</div>\n"
 
 
-# ------------------------------------------------------------------ implementações
+# ------------------------------------------------------------------ implementations
 
 
 class MarkdownItRenderer(Renderer):
-    """Renderizador baseado em ``markdown-it-py`` (compatível com CommonMark).
+    """Renderer built on ``markdown-it-py`` (CommonMark-compliant).
 
-    Recursos habilitados: tabelas, ~~tachado~~, realce de código (Pygments), âncoras nos
-    títulos, índice, links entre páginas (``[x](outra.md)``) e imagens com carga tardia.
-    HTML cru no Markdown é escapado, a menos que ``allow_html`` seja verdadeiro.
+    Enabled features: tables, ~~strikethrough~~, syntax-highlighted code blocks (via
+    Pygments), anchored headings, a table of contents, cross-page links
+    (``[x](other.md)``) and lazily loaded images. Raw HTML embedded in the Markdown
+    source is escaped, unless ``allow_html`` is enabled — and even then, the
+    ``script-src`` directive from :class:`wiki.security.SecurityHeaders` still
+    prevents any inline ``<script>`` from executing.
 
     Args:
-        allow_html: Preserva HTML cru presente no Markdown quando verdadeiro.
-        plugins: Funções extras que recebem o ``MarkdownIt`` para registrar novas regras
-            (ponto de extensão, ex.: ``mdit-py-plugins``).
+        allow_html: Preserve raw HTML found in the Markdown source when ``True``.
+        plugins: Extra callables that receive the underlying ``MarkdownIt`` instance,
+            so additional rules can be registered on it (an extension point intended
+            for packages such as ``mdit-py-plugins``).
     """
 
     def __init__(
@@ -215,7 +244,7 @@ class MarkdownItRenderer(Renderer):
         self._md = md
 
     def render(self, text: str) -> RenderedDocument:
-        """Ver :meth:`Renderer.render`."""
+        """See :meth:`Renderer.render`."""
         env: dict[str, Any] = {}
         html = self._md.render(text, env)
         return RenderedDocument(
@@ -225,7 +254,7 @@ class MarkdownItRenderer(Renderer):
         )
 
     def title(self, text: str) -> str | None:
-        """Ver :meth:`Renderer.title`. Faz apenas a análise, sem realce nem HTML."""
+        """See :meth:`Renderer.title`. Only parses the source; never generates HTML."""
         env: dict[str, Any] = {}
         self._md.parse(text, env)
         title: str | None = env.get("title")
@@ -233,20 +262,24 @@ class MarkdownItRenderer(Renderer):
 
 
 def _digest(text: str) -> bytes:
-    """Resumo curto do conteúdo, usado como chave de cache."""
+    """Compute a short digest of the content, used as the cache key."""
     return hashlib.blake2b(text.encode("utf-8"), digest_size=16).digest()
 
 
 class CachedRenderer(Renderer):
-    """*Decorator* que memoriza os resultados de outro :class:`Renderer`.
+    """A *Decorator* that memoises the results of another :class:`Renderer`.
 
-    A chave é um resumo do **conteúdo** do texto e não do nome/data do arquivo; assim o
-    cache nunca serve HTML desatualizado e não depende da precisão do relógio do disco.
+    The cache key is a digest of the text's **content**, not the file's name or
+    modification time — so the cache can never serve stale HTML after an edit, and its
+    correctness does not depend on the filesystem clock's resolution or accuracy.
 
     Args:
-        inner: Renderizador decorado.
-        document_cache_size: Máximo de documentos renderizados mantidos em memória.
-        title_cache_size: Máximo de títulos mantidos (são pequenos, então o limite é maior).
+        inner: The wrapped renderer that actually does the work on a cache miss.
+        document_cache_size: Maximum number of rendered documents kept in memory —
+            forwarded to an internal :class:`wiki.cache.LRUCache`.
+        title_cache_size: Maximum number of titles kept. Titles are tiny compared to
+            full documents, so a much larger limit is cheap and worthwhile — the index
+            page needs every page's title, even ones whose body was never rendered.
     """
 
     def __init__(
@@ -261,9 +294,9 @@ class CachedRenderer(Renderer):
         self._titles: LRUCache[bytes, str | None] = LRUCache(title_cache_size)
 
     def render(self, text: str) -> RenderedDocument:
-        """Ver :meth:`Renderer.render`."""
+        """See :meth:`Renderer.render`."""
         return self._documents.get_or_compute(_digest(text), lambda: self._inner.render(text))
 
     def title(self, text: str) -> str | None:
-        """Ver :meth:`Renderer.title`."""
+        """See :meth:`Renderer.title`."""
         return self._titles.get_or_compute(_digest(text), lambda: self._inner.title(text))

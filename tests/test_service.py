@@ -1,10 +1,11 @@
-"""Testes de wiki.service, usando um repositório em memória (injeção de dependência)."""
+"""Tests for wiki.service, using an in-memory repository (dependency injection)."""
 
 from __future__ import annotations
 
-import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from wiki.exceptions import ContentNotFoundError
 from wiki.models import Download, Page, SourceFile
@@ -16,7 +17,7 @@ NOW = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class InMemoryRepository(ContentRepository):
-    """Repositório de teste: o "sistema de arquivos" é um dicionário."""
+    """Test repository: the "filesystem" is just a dictionary."""
 
     def __init__(self, files: dict[str, str]) -> None:
         self._files = files
@@ -40,71 +41,70 @@ class InMemoryRepository(ContentRepository):
         return Path("/virtual") / name
 
 
-class WikiServiceTests(unittest.TestCase):
-    """Casos de uso da camada de serviço."""
+@pytest.fixture
+def service() -> WikiService:
+    return WikiService(
+        InMemoryRepository(
+            {
+                "home.md": "# Home\n\ntext",
+                "no-title.md": "just text",
+                "guide/quick_tip.md": "content",
+                "data/table.csv": "a,b",
+                "foo.md": "# Foo page",
+                "foo": "extensionless file called foo",
+            }
+        ),
+        CachedRenderer(MarkdownItRenderer()),
+    )
 
-    def setUp(self) -> None:
-        self.service = WikiService(
-            InMemoryRepository(
-                {
-                    "inicio.md": "# Início\n\ntexto",
-                    "sem-titulo.md": "apenas texto",
-                    "guia/dica_rapida.md": "conteúdo",
-                    "dados/tabela.csv": "a,b",
-                    "foo.md": "# Página foo",
-                    "foo": "arquivo sem extensão chamado foo",
-                }
-            ),
-            CachedRenderer(MarkdownItRenderer()),
-        )
 
-    def test_catalog_splits_pages_and_files(self) -> None:
-        catalog = self.service.catalog()
-        self.assertEqual(
-            sorted(p.slug for p in catalog.pages),
-            ["foo", "guia/dica_rapida", "inicio", "sem-titulo"],
-        )
-        self.assertEqual(sorted(f.name for f in catalog.files), ["dados/tabela.csv", "foo"])
+class TestWikiService:
+    """Use cases in the service layer."""
 
-    def test_catalog_titles_use_h1_or_humanized_slug(self) -> None:
-        titles = {p.slug: p.title for p in self.service.catalog().pages}
-        self.assertEqual(titles["inicio"], "Início")
-        self.assertEqual(titles["sem-titulo"], "Sem titulo")
-        self.assertEqual(titles["guia/dica_rapida"], "Dica rapida")
+    def test_catalog_splits_pages_and_files(self, service: WikiService) -> None:
+        catalog = service.catalog()
+        assert sorted(p.slug for p in catalog.pages) == [
+            "foo",
+            "guide/quick_tip",
+            "home",
+            "no-title",
+        ]
+        assert sorted(f.name for f in catalog.files) == ["data/table.csv", "foo"]
 
-    def test_page_groups_put_root_first(self) -> None:
-        groups = self.service.catalog().page_groups()
-        self.assertEqual([folder for folder, _ in groups], ["", "guia"])
+    def test_catalog_titles_use_h1_or_humanized_slug(self, service: WikiService) -> None:
+        titles = {p.slug: p.title for p in service.catalog().pages}
+        assert titles["home"] == "Home"
+        assert titles["no-title"] == "No title"
+        assert titles["guide/quick_tip"] == "Quick tip"
 
-    def test_get_page(self) -> None:
-        page = self.service.get_page("inicio")
-        self.assertEqual(page.info.title, "Início")
-        self.assertEqual(page.info.source_name, "inicio.md")
-        self.assertIn("<p>texto</p>", page.document.html)
+    def test_page_groups_put_root_first(self, service: WikiService) -> None:
+        groups = service.catalog().page_groups()
+        assert [folder for folder, _ in groups] == ["", "guide"]
 
-    def test_get_page_missing(self) -> None:
-        with self.assertRaises(ContentNotFoundError):
-            self.service.get_page("nao-existe")
+    def test_get_page(self, service: WikiService) -> None:
+        page = service.get_page("home")
+        assert page.info.title == "Home"
+        assert page.info.source_name == "home.md"
+        assert "<p>text</p>" in page.document.html
 
-    def test_get_download(self) -> None:
-        download = self.service.get_download("dados/tabela.csv")
-        self.assertEqual(download.filename, "tabela.csv")
+    def test_get_page_missing(self, service: WikiService) -> None:
+        with pytest.raises(ContentNotFoundError):
+            service.get_page("does-not-exist")
 
-    def test_resolve_prefers_page_over_file(self) -> None:
-        self.assertIsInstance(self.service.resolve("foo"), Page)
+    def test_get_download(self, service: WikiService) -> None:
+        download = service.get_download("data/table.csv")
+        assert download.filename == "table.csv"
 
-    def test_resolve_falls_back_to_download(self) -> None:
-        self.assertIsInstance(self.service.resolve("dados/tabela.csv"), Download)
-        # com extensão, o .md é baixado em vez de exibido
-        resource = self.service.resolve("inicio.md")
-        self.assertIsInstance(resource, Download)
+    def test_resolve_prefers_page_over_file(self, service: WikiService) -> None:
+        assert isinstance(service.resolve("foo"), Page)
+
+    def test_resolve_falls_back_to_download(self, service: WikiService) -> None:
+        assert isinstance(service.resolve("data/table.csv"), Download)
+        # with the extension, the .md file is downloaded rather than rendered
+        resource = service.resolve("home.md")
         assert isinstance(resource, Download)
-        self.assertEqual(resource.filename, "inicio.md")
+        assert resource.filename == "home.md"
 
-    def test_resolve_missing(self) -> None:
-        with self.assertRaises(ContentNotFoundError):
-            self.service.resolve("nada")
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_resolve_missing(self, service: WikiService) -> None:
+        with pytest.raises(ContentNotFoundError):
+            service.resolve("nothing")

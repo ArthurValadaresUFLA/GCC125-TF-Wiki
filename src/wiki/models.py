@@ -1,4 +1,9 @@
-"""Modelos de domínio: objetos de valor imutáveis trocados entre as camadas."""
+"""Domain models: immutable value objects passed between layers.
+
+None of these types know anything about Flask, the filesystem, or Markdown — they are
+plain data plus a handful of pure helper functions, which keeps :mod:`wiki.service`
+easy to unit-test with an in-memory repository (see ``tests/test_service.py``).
+"""
 
 from __future__ import annotations
 
@@ -8,30 +13,35 @@ from itertools import groupby
 from pathlib import Path
 
 MARKDOWN_SUFFIX = ".md"
-"""Extensão (em minúsculas) que identifica um arquivo como página."""
+"""Lower-case extension that identifies a file as a page."""
 
 
 def is_markdown(name: str) -> bool:
-    """Diz se o nome de arquivo corresponde a uma página Markdown."""
+    """Return whether the filename corresponds to a Markdown page."""
     return name.endswith(MARKDOWN_SUFFIX)
 
 
 def slug_for(name: str) -> str:
-    """Converte o nome de um arquivo Markdown no *slug* usado na URL.
+    """Convert a Markdown filename into the slug used in the URL.
 
     Example:
-        ``"guia/instalacao.md"`` vira ``"guia/instalacao"``.
+        ``"guia/instalacao.md"`` becomes ``"guia/instalacao"``.
     """
     return name[: -len(MARKDOWN_SUFFIX)] if is_markdown(name) else name
 
 
 def source_name_for(slug: str) -> str:
-    """Operação inversa de :func:`slug_for`: ``"guia/x"`` vira ``"guia/x.md"``."""
+    """Reverse of :func:`slug_for`: ``"guia/x"`` becomes ``"guia/x.md"``."""
     return slug + MARKDOWN_SUFFIX
 
 
 def humanize(slug: str) -> str:
-    """Gera um título legível a partir do slug, para páginas sem ``# Título``."""
+    """Derive a readable title from a slug, for pages with no ``# Title`` heading.
+
+    Only the final path segment is used (so ``"guia/dica_rapida"`` yields
+    ``"Dica rapida"``, not ``"Guia dica rapida"``), underscores and hyphens become
+    spaces, and the first letter is capitalised.
+    """
     stem = slug.rpartition("/")[2]
     words = stem.replace("-", " ").replace("_", " ").strip()
     return words[:1].upper() + words[1:] if words else slug
@@ -39,12 +49,13 @@ def humanize(slug: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class SourceFile:
-    """Metadados de um arquivo visível na pasta de conteúdo.
+    """Metadata for a file visible in the content folder.
 
     Attributes:
-        name: Caminho relativo à raiz, sempre com ``/`` como separador.
-        size: Tamanho em bytes.
-        modified: Data da última modificação (UTC).
+        name: Path relative to the content root, always using ``/`` as the separator
+            (even on Windows), so slugs and URLs stay platform-independent.
+        size: Size in bytes.
+        modified: Last-modified timestamp, in UTC.
     """
 
     name: str
@@ -54,12 +65,14 @@ class SourceFile:
 
 @dataclass(frozen=True, slots=True)
 class TocEntry:
-    """Um item do índice ("Nesta página") de um documento.
+    """A single entry in a document's table of contents ("On this page").
 
     Attributes:
-        level: Nível do título (1 a 6).
-        title: Texto do título, sem marcação.
-        anchor: Identificador usado no fragmento da URL (``#anchor``).
+        level: Heading level, from 1 (``#``) to 6 (``######``).
+        title: Plain-text heading, with any Markdown inline formatting stripped.
+        anchor: Identifier used in the URL fragment (``#anchor``); see
+            :func:`wiki.rendering.slugify` for how it is derived, and how collisions
+            between identically worded headings are disambiguated.
     """
 
     level: int
@@ -69,12 +82,13 @@ class TocEntry:
 
 @dataclass(frozen=True, slots=True)
 class RenderedDocument:
-    """Resultado da conversão de Markdown para HTML.
+    """The result of converting Markdown into HTML.
 
     Attributes:
-        html: Corpo do documento em HTML.
-        title: Texto do primeiro ``# Título`` ou ``None`` se não houver.
-        toc: Títulos do documento, na ordem em que aparecem.
+        html: The document body, as HTML.
+        title: Text of the first ``# Heading``, or ``None`` if the document has none —
+            in which case callers typically fall back to :func:`humanize`.
+        toc: The document's headings, in the order they appear in the source text.
     """
 
     html: str
@@ -84,14 +98,14 @@ class RenderedDocument:
 
 @dataclass(frozen=True, slots=True)
 class PageInfo:
-    """Resumo de uma página, usado no índice.
+    """Summary of a page, as shown in the index.
 
     Attributes:
-        slug: Identificador na URL (sem a extensão ``.md``).
-        title: Título exibido.
-        source_name: Nome do arquivo de origem, relativo à raiz.
-        size: Tamanho do arquivo em bytes.
-        modified: Data da última modificação (UTC).
+        slug: Identifier used in the URL (without the ``.md`` extension).
+        title: Title displayed to the reader.
+        source_name: Name of the underlying source file, relative to the content root.
+        size: Size of the source file, in bytes.
+        modified: Last-modified timestamp of the source file, in UTC.
     """
 
     slug: str
@@ -102,18 +116,18 @@ class PageInfo:
 
     @property
     def folder(self) -> str:
-        """Pasta que contém a página (``""`` para a raiz)."""
+        """Folder that contains this page (``""`` for the content root)."""
         return self.slug.rpartition("/")[0]
 
 
 @dataclass(frozen=True, slots=True)
 class FileInfo:
-    """Resumo de um arquivo que não é Markdown e fica disponível para download.
+    """Summary of a non-Markdown file made available for download.
 
     Attributes:
-        name: Caminho relativo à raiz.
-        size: Tamanho em bytes.
-        modified: Data da última modificação (UTC).
+        name: Path relative to the content root.
+        size: Size in bytes.
+        modified: Last-modified timestamp, in UTC.
     """
 
     name: str
@@ -123,21 +137,26 @@ class FileInfo:
 
 @dataclass(frozen=True, slots=True)
 class Catalog:
-    """Tudo o que a pasta de conteúdo publica: páginas e arquivos para download.
+    """Everything the content folder publishes: pages and downloadable files.
 
     Attributes:
-        pages: Páginas Markdown.
-        files: Demais arquivos.
+        pages: Markdown pages.
+        files: Every other file.
     """
 
     pages: tuple[PageInfo, ...]
     files: tuple[FileInfo, ...]
 
     def page_groups(self) -> tuple[tuple[str, tuple[PageInfo, ...]], ...]:
-        """Agrupa as páginas por pasta, preservando a ordem interna de cada grupo.
+        """Group the pages by folder, preserving each group's internal order.
+
+        Sorting is case-insensitive and folder names are compared with
+        :meth:`str.casefold`, so ``"Guia"`` and ``"guia"`` end up in the same group.
+        The content root (``""``) always sorts first, since it casefolds to the empty
+        string, which precedes any non-empty folder name.
 
         Returns:
-            Tuplas ``(pasta, páginas)``; a raiz (``""``) vem primeiro.
+            ``(folder, pages)`` tuples, with the content root first.
         """
         ordered = sorted(self.pages, key=lambda page: page.folder.casefold())
         return tuple(
@@ -148,11 +167,11 @@ class Catalog:
 
 @dataclass(frozen=True, slots=True)
 class Page:
-    """Uma página completa, pronta para ser exibida.
+    """A complete page, ready to be displayed.
 
     Attributes:
-        info: Metadados da página.
-        document: Conteúdo já convertido em HTML.
+        info: The page's metadata.
+        document: Its content, already converted to HTML.
     """
 
     info: PageInfo
@@ -161,11 +180,13 @@ class Page:
 
 @dataclass(frozen=True, slots=True)
 class Download:
-    """Um arquivo a ser enviado ao cliente como anexo.
+    """A file to be sent to the client as an attachment.
 
     Attributes:
-        path: Caminho absoluto, já validado, no sistema de arquivos.
-        filename: Nome sugerido para salvar o arquivo.
+        path: Absolute, already-validated path on the filesystem — see
+            :meth:`wiki.repository.FileSystemRepository.path_of` for the security
+            checks applied before this value is ever constructed.
+        filename: Filename suggested to the browser when saving.
     """
 
     path: Path
@@ -173,4 +194,4 @@ class Download:
 
 
 Resource = Page | Download
-"""O que uma URL pode resolver: uma página renderizada ou um arquivo para baixar."""
+"""What a URL can resolve to: either a rendered page or a downloadable file."""
