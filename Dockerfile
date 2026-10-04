@@ -42,7 +42,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ############################################################
 FROM python:${PYTHON_VERSION}-slim AS runtime
 
-ARG PICO_VENDOR_FILE="src/wiki/static/vendor/picocss/pico.min.css"
+# PicoCSS é baixado durante o build (não é versionado): mantenha PICO_VERSION em sincronia
+# com o Makefile. A variante "classless" vira o pico.min.css que o app espera.
+ARG PICO_VERSION=2.0.6
+ARG PICO_FILE=pico.classless.min.css
+ARG PICO_DIR=src/wiki/static/vendor/picocss
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -64,13 +68,12 @@ COPY --from=builder /app/.venv ./.venv
 COPY src ./src
 RUN chmod -R a+rX ./src
 
-RUN set -eu; \
-    FILE="./${PICO_VENDOR_FILE}"; \
-    if [ ! -f "$FILE" ]; then \
-        echo "ERRO: $FILE ausente." >&2; \
-        echo "Rode 'make assets' (ou 'make docker-build') antes de buildar a imagem." >&2; \
-        exit 1; \
-    fi
+# ADD de URL é feito pelo próprio builder (Docker/Podman), sem precisar de curl na imagem.
+# Para travar a integridade, acrescente --checksum=sha256:<hash> em cada ADD.
+ADD --chmod=644 https://cdn.jsdelivr.net/npm/@picocss/pico@${PICO_VERSION}/css/${PICO_FILE} \
+    ./${PICO_DIR}/pico.min.css
+ADD --chmod=644 https://raw.githubusercontent.com/picocss/pico/main/LICENSE.md \
+    ./${PICO_DIR}/LICENSE.md
 
 USER wiki
 

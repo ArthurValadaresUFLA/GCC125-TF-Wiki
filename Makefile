@@ -75,7 +75,7 @@ docs:  ## Gera a documentação em site/
 docs-serve:  ## Documentação com recarga automática em http://127.0.0.1:8000
 	uv run mkdocs serve
 
-docker-build: $(PICO_VENDOR_FILE)  ## Garante o PicoCSS antes de buildar a imagem
+docker-build: ## Garante o PicoCSS antes de buildar a imagem
 	$(CONTAINER_VIRT) build --build-arg PICO_VENDOR_FILE=$(PICO_VENDOR_FILE) -t wiki .
 
 docker-run:  ## Executa a imagem publicando $(CONTENT) em http://localhost:5000
