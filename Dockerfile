@@ -62,6 +62,7 @@ RUN groupadd --gid 10001 wiki \
 # Camadas ordenadas da que menos muda para a que mais muda
 COPY --from=builder /app/.venv ./.venv
 COPY src ./src
+RUN chmod -R a+rX ./src
 
 RUN set -eu; \
     FILE="./${PICO_VENDOR_FILE}"; \
