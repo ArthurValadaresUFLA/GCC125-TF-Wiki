@@ -1,4 +1,4 @@
-"""Composição da aplicação: *application factory* e ligação das dependências."""
+"""Application composition: the *application factory* and dependency wiring."""
 
 from __future__ import annotations
 
@@ -15,17 +15,17 @@ from wiki.views import create_blueprint
 
 
 def build_service(settings: Settings) -> WikiService:
-    """Monta o grafo de objetos do domínio (*composition root*).
+    """Assemble the domain's object graph (the *composition root*).
 
     Args:
-        settings: Configuração da aplicação.
+        settings: The application's configuration.
 
     Returns:
-        Um :class:`~wiki.service.WikiService` com repositório de arquivos e renderizador
-        de Markdown com cache.
+        A :class:`~wiki.service.WikiService` wired to a filesystem repository and a
+        cached Markdown renderer.
 
     Raises:
-        ConfigurationError: Se a pasta de conteúdo não existir.
+        ConfigurationError: If the content folder does not exist.
     """
     repository = FileSystemRepository(settings.content_dir)
     renderer = CachedRenderer(
@@ -36,19 +36,23 @@ def build_service(settings: Settings) -> WikiService:
 
 
 def create_app(settings: Settings | None = None) -> Flask:
-    """*Application factory* do Flask.
+    """Flask *application factory*.
 
-    Os arquivos estáticos ficam em ``/_static`` (e não em ``/static``) para não colidir
-    com uma pasta ``static`` dentro do conteúdo publicado.
+    Static assets are served from ``/_static`` rather than the default ``/static``,
+    precisely so that they never collide with a folder literally named ``static``
+    inside the *published content* — see
+    ``tests/test_views.py::TestPage::test_static_assets_do_not_shadow_content_named_static``
+    for the regression this guards against.
 
     Args:
-        settings: Configuração. Se omitida, é lida das variáveis de ambiente ``WIKI_*``.
+        settings: Configuration to use. If omitted, it is read from the ``WIKI_*``
+            environment variables (see :meth:`wiki.config.Settings.from_env`).
 
     Returns:
-        A aplicação WSGI configurada.
+        The fully configured WSGI application.
 
     Raises:
-        ConfigurationError: Se a configuração for inválida.
+        ConfigurationError: If the configuration is invalid.
     """
     settings = settings or Settings.from_env()
     app = Flask(__name__, static_url_path="/_static")
@@ -62,7 +66,7 @@ def create_app(settings: Settings | None = None) -> Flask:
 
 
 def _register_template_context(app: Flask, settings: Settings) -> None:
-    """Disponibiliza em todos os templates o título, o idioma e a URL do tema."""
+    """Make the site title, language, and theme URL available in every template."""
 
     @app.context_processor
     def inject_globals() -> dict[str, str]:
@@ -77,12 +81,23 @@ def _register_template_context(app: Flask, settings: Settings) -> None:
 
 
 def _register_error_handlers(app: Flask) -> None:
-    """Converte "conteúdo não encontrado" (e demais erros HTTP) em páginas amigáveis."""
+    """Turn "content not found" (and every other HTTP error) into a friendly page.
+
+    Two handlers are registered:
+
+    * :func:`not_found` covers both the domain-specific
+      :class:`~wiki.exceptions.ContentNotFoundError` and the generic HTTP 404, so a
+      missing page and a genuinely unmatched route render the exact same message.
+    * :func:`http_error` is the catch-all for any *other* :class:`HTTPException`
+      (405 Method Not Allowed, 500 Internal Server Error, …). Flask dispatches to the
+      most specific handler available, so this one only ever fires for status codes
+      that are not 404.
+    """
 
     @app.errorhandler(ContentNotFoundError)
     @app.errorhandler(404)
     def not_found(_error: Exception) -> tuple[str, int]:
-        return render_template("error.html", status=404, message="Página não encontrada."), 404
+        return render_template("error.html", status=404, message="Page not found."), 404
 
     @app.errorhandler(HTTPException)
     def http_error(error: HTTPException) -> tuple[str, int]:

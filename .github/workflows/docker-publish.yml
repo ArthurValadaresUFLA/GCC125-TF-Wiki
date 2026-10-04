@@ -17,6 +17,7 @@ env:
 
 jobs:
   # Lint, testes e build do pacote (python-package.yml). Sem isso, nada é publicado.
+  # Requer `on: workflow_call` em python-package.yml.
   ci:
     name: CI
     uses: ./.github/workflows/python-package.yml
@@ -92,27 +93,44 @@ jobs:
 
       # Sobe o container com as mesmas restrições do docker-compose.yml
       # (somente leitura, sem privilégios) e confere as rotas e o tema embutido.
+      # As respostas são guardadas em variáveis (em vez de `curl | grep -q`) para
+      # evitar falso erro por SIGPIPE quando o grep fecha o pipe antes do curl.
       - name: Teste de fumaça da imagem
+        id: smoke
         run: |
+          set -euo pipefail
           docker run -d --name wiki-smoke -p 5000:5000 \
             -v "$PWD/examples/content:/app/data:ro" \
             --read-only --tmpfs /tmp \
             --cap-drop ALL --security-opt no-new-privileges:true \
             wiki:smoke
           BASE=http://127.0.0.1:5000
-          curl --fail --silent --show-error --retry 15 --retry-delay 1 --retry-connrefused "$BASE/" > /dev/null
-          curl --fail --silent --show-error "$BASE/bem-vindo" | grep -q "Bem-vindo"
-          curl --fail --silent --show-error "$BASE/bem-vindo/pdf" | grep -q "data-autoprint"
-          curl --fail --silent --show-error --head "$BASE/dados/vendas.csv" | grep -qi "content-disposition: attachment"
-          curl --fail --silent --show-error --head "$BASE/_static/vendor/pico.classless.min.css"
+          CURL=(curl --fail --silent --show-error)
 
+          "${CURL[@]}" --retry 15 --retry-delay 1 --retry-connrefused --retry-all-errors "$BASE/" > /dev/null
+
+          BODY=$("${CURL[@]}" "$BASE/bem-vindo")
+          grep -q "Bem-vindo" <<< "$BODY"
+
+          BODY=$("${CURL[@]}" "$BASE/bem-vindo/pdf")
+          grep -q "data-autoprint" <<< "$BODY"
+
+          HEADERS=$("${CURL[@]}" --head "$BASE/dados/vendas.csv")
+          grep -qi "content-disposition: attachment" <<< "$HEADERS"
+
+          "${CURL[@]}" --head "$BASE/_static/vendor/picocss/pico.min.css" > /dev/null
+
+      # Só roda se o próprio teste de fumaça falhou; falhas de passos anteriores
+      # (build, make assets...) aparecem no passo que realmente quebrou.
       - name: Logs do container (em caso de falha)
-        if: failure()
-        run: docker logs wiki-smoke
+        if: ${{ failure() && steps.smoke.conclusion == 'failure' }}
+        run: |
+          docker ps -a
+          docker logs wiki-smoke || echo "O container não chegou a ser criado: veja a saída do 'docker run' no passo anterior."
 
       - name: Parar o container de teste
         if: always()
-        run: docker rm --force wiki-smoke
+        run: docker rm --force wiki-smoke || true
 
       # 2) Reaproveita as camadas do passo 1 (cache) e publica.
       - name: Push da imagem Docker
@@ -125,8 +143,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
 
+      # A expressão inteira precisa ficar dentro de ${{ }}: com texto fora das chaves
+      # o `if` vira uma string e é sempre verdadeiro (o release seria recriado a cada push).
       - name: Criar Release no GitHub
-        if: ${{ !env.ACT }} && steps.release_check.outputs.is_new == 'true'
+        if: ${{ !env.ACT && steps.release_check.outputs.is_new == 'true' }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.extract_version.outputs.version }}

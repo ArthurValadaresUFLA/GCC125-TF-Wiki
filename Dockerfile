@@ -4,32 +4,12 @@ ARG PYTHON_VERSION=3.12
 # Mesma minor exigida em [build-system] do pyproject.toml (uv_build>=0.12,<0.13)
 ARG UV_VERSION=0.12
 
-############################################################
 # Stage 0 — uv: só fornece o binário do uv (não vai para a imagem final)
 ############################################################
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
-
 ############################################################
-# Stage 1 — assets: baixa o tema (Pico CSS) para servi-lo localmente
-############################################################
-FROM python:${PYTHON_VERSION}-slim AS assets
-
-ARG PICO_VARIANT="classless"
-ARG PICO_VERSION="2.0.6"
-ARG PICO_SRC_DIR="src/wiki/static/vendor/picocss"
-ARG PICO_APP_DIR="/app/src/wiki/static/vendor/picocss/current"
-
-COPY ${PICO_SRC_DIR}/v${PICO_VERSION} ${PICO_APP_DIR}
-
-RUN set -eu; \
-    SRC="${PICO_APP_DIR}/pico${PICO_VARIANT:+.$PICO_VARIANT}.min.css"; \
-    DEST_DIR="$(dirname "${PICO_APP_DIR}")"; \
-    if [ ! -f "$SRC" ]; then echo "Variante inválida: $PICO_VARIANT" >&2; exit 1; fi; \
-    cp "$SRC" "${DEST_DIR}/pico.min.css"
-
-############################################################
-# Stage 2 — builder: instala as dependências (exatamente as do uv.lock)
+# Stage 1 — builder: instala as dependências (exatamente as do uv.lock)
 ############################################################
 FROM python:${PYTHON_VERSION}-slim AS builder
 
@@ -57,11 +37,16 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-default-groups --no-install-project
 
-
 ############################################################
-# Stage 3 — runtime: só o necessário para executar
+# Stage 2 — runtime: só o necessário para executar
 ############################################################
 FROM python:${PYTHON_VERSION}-slim AS runtime
+
+# PicoCSS é baixado durante o build (não é versionado): mantenha PICO_VERSION em sincronia
+# com o Makefile. A variante "classless" vira o pico.min.css que o app espera.
+ARG PICO_VERSION=2.0.6
+ARG PICO_FILE=pico.classless.min.css
+ARG PICO_DIR=src/wiki/static/vendor/picocss
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -73,15 +58,22 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Usuário sem privilégios + pasta de conteúdo (normalmente um volume montado)
-RUN groupadd --system --gid 10001 wiki \
-    && useradd --system --uid 10001 --gid wiki --no-create-home \
+RUN groupadd --gid 10001 wiki \
+    && useradd --uid 10001 --gid wiki --no-create-home \
         --shell /usr/sbin/nologin wiki \
     && mkdir -p "$WIKI_DIR"
 
 # Camadas ordenadas da que menos muda para a que mais muda
 COPY --from=builder /app/.venv ./.venv
-COPY --from=assets /app/src/wiki/static/vendor/picocss ./src/wiki/static/vendor/picocss
 COPY src ./src
+RUN chmod -R a+rX ./src
+
+# ADD de URL é feito pelo próprio builder (Docker/Podman), sem precisar de curl na imagem.
+# Para travar a integridade, acrescente --checksum=sha256:<hash> em cada ADD.
+ADD --chmod=644 https://cdn.jsdelivr.net/npm/@picocss/pico@${PICO_VERSION}/css/${PICO_FILE} \
+    ./${PICO_DIR}/pico.min.css
+ADD --chmod=644 https://raw.githubusercontent.com/picocss/pico/main/LICENSE.md \
+    ./${PICO_DIR}/LICENSE.md
 
 USER wiki
 

@@ -1,23 +1,58 @@
-.git
+# --- Controle de versão e metadados do projeto -----------------------------
+.git/
+.github/
 .gitignore
-.venv
-.env
-.env.*
+.dockerignore
+
+# --- Documentação e site gerado ---------------------------------------------
+docs/
+mkdocs.yml
+site/
+README.md
+
+# --- Dev tooling: nada disso é necessário para a imagem ---------------------
+# (fetch de assets e geração do pygments.css vivem no Makefile/host, não no build)
+scripts/
+Makefile
+Dockerfile
+docker-compose.yml
+.pre-commit-config.yaml
+.act/
+
+# --- PicoCSS: baixado pelo Dockerfile durante o build, nunca vem do host ---------
+src/wiki/static/vendor/
+
+# --- Ambiente Python local e caches ------------------------------------------
+.venv/
 __pycache__/
 *.py[cod]
+.mypy_cache/
 .pytest_cache/
 .ruff_cache/
-.mypy_cache/
-.coverage
-htmlcov/
-site/
+*.egg-info/
+build/
+dist/
+
+# --- Testes e cobertura -------------------------------------------------------
 tests/
-docs/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# --- Conteúdo de exemplo / dados locais ---------------------------------------
 examples/
 data/
-README.md
-Dockerfile
-.dockerignore
-docker-compose.yml
-mkdocs.yml
-Makefile
+
+# --- Segredos e configuração local ---------------------------------------------
+.env
+.env.*
+.secrets
+*.pem
+*.key
+
+# --- Cruft de editor/SO ----------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+*.swp
