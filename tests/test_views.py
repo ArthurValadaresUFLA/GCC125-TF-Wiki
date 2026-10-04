@@ -169,7 +169,7 @@ class SecurityHeadersTests(ViewsTestCase):
 
     def test_local_theme_is_served_from_static(self) -> None:
         self.assertIn(
-            'href="/_static/vendor/picocss/current/pico.min.css"',
+            'href="/_static/vendor/picocss/pico.min.css"',
             self.get("/").get_data(as_text=True),
         )
 
